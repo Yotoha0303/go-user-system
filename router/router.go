@@ -1,7 +1,7 @@
 package router
 
 import (
-	"UsersSystem/utils"
+	"go-user-system/utils"
 
 	"github.com/gin-gonic/gin"
 )

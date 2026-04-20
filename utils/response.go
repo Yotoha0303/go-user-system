@@ -1,15 +1,13 @@
 package utils
 
-import "github.com/gin-gonic/gin"
+import (
+	"go-user-system/model"
 
-type Response struct {
-	Code int         `json:"code"`
-	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
-}
+	"github.com/gin-gonic/gin"
+)
 
 func Success(c *gin.Context, data interface{}) {
-	c.JSON(200, Response{
+	c.JSON(200, model.Response{
 		Code: 0,
 		Msg:  "success",
 		Data: data,
@@ -17,7 +15,7 @@ func Success(c *gin.Context, data interface{}) {
 }
 
 func Fail(c *gin.Context, httpStatus int, code int, msg string) {
-	c.JSON(httpStatus, Response{
+	c.JSON(httpStatus, model.Response{
 		Code: code,
 		Msg:  msg,
 		Data: nil,

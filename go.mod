@@ -1,4 +1,4 @@
-module UsersSystem
+module go-user-system
 
 go 1.25.5
 

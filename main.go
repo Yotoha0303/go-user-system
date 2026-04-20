@@ -1,9 +1,9 @@
 package main
 
 import (
-	"UsersSystem/config"
-	"UsersSystem/router"
 	"fmt"
+	"go-user-system/config"
+	"go-user-system/router"
 	"log"
 )
 
