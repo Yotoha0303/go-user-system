@@ -3,8 +3,13 @@ package main
 import (
 	"fmt"
 	"go-user-system/config"
+	"go-user-system/global"
+	"go-user-system/model"
 	"go-user-system/router"
 	"log"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 // type Config struct {
@@ -14,6 +19,16 @@ import (
 // }
 
 func main() {
+	dsn := "root:Angel0303@tcp(127.0.0.1:3306)/go_user_system?charset=utf8mb4&parseTime=True&loc=Local"
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+
+	if err != nil {
+		log.Fatalf("failed to connect database")
+	}
+
+	db.AutoMigrate(&model.User{})
+	global.DB = db
+
 	cfg, err := config.Load("config.yml")
 	if err != nil {
 		// 程序崩溃，不可修复类型的报错

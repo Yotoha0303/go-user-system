@@ -1,6 +1,7 @@
 package router
 
 import (
+	"go-user-system/api"
 	"go-user-system/utils"
 
 	"github.com/gin-gonic/gin"
@@ -12,5 +13,7 @@ func SetupRouter() *gin.Engine {
 	r.GET("/ping", func(c *gin.Context) {
 		utils.Success(c, gin.H{"message": "pong"})
 	})
+
+	r.POST("/register", api.RegisterHandler)
 	return r
 }
