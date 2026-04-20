@@ -26,7 +26,9 @@ func main() {
 		log.Fatalf("failed to connect database")
 	}
 
-	db.AutoMigrate(&model.User{})
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		log.Fatalf("auto migrate failed:%v", err)
+	}
 	global.DB = db
 
 	cfg, err := config.Load("config.yml")
