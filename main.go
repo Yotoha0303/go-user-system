@@ -8,16 +8,7 @@ import (
 	"go-user-system/model"
 	"go-user-system/router"
 	"log"
-
-	"github.com/joho/godotenv"
 )
-
-func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found")
-	}
-}
 
 // type Config struct {
 // 	Server struct {

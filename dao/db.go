@@ -4,17 +4,28 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 func InitDB() (*gorm.DB, error) {
+	//允许加载错误
+	_ = godotenv.Load()
+
+	//不允许加载出错
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
+		dbUser,
+		dbPassword,
+		dbHost,
+		dbPort,
+		dbName,
 	)
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
 }
