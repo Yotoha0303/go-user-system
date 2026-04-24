@@ -3,14 +3,21 @@ package main
 import (
 	"fmt"
 	"go-user-system/config"
+	"go-user-system/dao"
 	"go-user-system/global"
 	"go-user-system/model"
 	"go-user-system/router"
 	"log"
 
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found")
+	}
+}
 
 // type Config struct {
 // 	Server struct {
@@ -19,8 +26,7 @@ import (
 // }
 
 func main() {
-	dsn := "root:Angel0303@tcp(127.0.0.1:3306)/go_user_system?charset=utf8mb4&parseTime=True&loc=Local"
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := dao.InitDB()
 
 	if err != nil {
 		log.Fatalf("failed to connect database")
