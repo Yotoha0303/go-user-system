@@ -33,7 +33,7 @@ func Register(username, password string) error {
 		return ErrPasswordEmpty
 	}
 	if len(username) < 3 {
-		return errors.New("username too short")
+		return ErrUsernameTooShort
 	}
 	if len(password) < 6 {
 		return ErrPasswordTooShort
@@ -92,7 +92,7 @@ func Login(username, password string) (*model.User, error) {
 			return nil, ErrUserNotFound
 		}
 		//注意：返回错误
-		return nil, ErrUsernameExists
+		return nil, err
 	}
 
 	if user.Status != model.UserStatusActive {

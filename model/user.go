@@ -2,6 +2,11 @@ package model
 
 import "time"
 
+const (
+	UserStatusActive   int8 = 1
+	UserStatusDisabled int8 = 2
+)
+
 type User struct {
 	ID           uint64 `gorm:"primaryKey;autoIncrement"`
 	Username     string `gorm:"size:64;not null;uniqueIndex"`
@@ -12,4 +17,6 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
-var UserStatusActive int8
+func (User) tableName() string {
+	return "users"
+}
