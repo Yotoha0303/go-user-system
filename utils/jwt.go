@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"log"
 	"os"
 	"time"
 
@@ -9,7 +10,16 @@ import (
 )
 
 // 暂时写死，后续加入到全局文件中
-var jwtkey = []byte(os.Getenv("JWT_KEY"))
+// var jwtkey = []byte(os.Getenv("JWT_KEY"))
+var jwtkey []byte
+
+func InitJWTKey() {
+	key := os.Getenv("JWT_KEY")
+	if key == "" {
+		log.Fatal("JWT_KEY is not set")
+	}
+	jwtkey = []byte(key)
+}
 
 type UserClaims struct {
 	UserId   uint   `json:"user_id"`
