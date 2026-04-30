@@ -24,14 +24,14 @@ func InitJWTKey() {
 }
 
 type UserClaims struct {
-	UserId   uint   `json:"user_id"`
+	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
 func GenerateToken(userID uint, username string) (string, error) {
 	claims := UserClaims{
-		UserId:   userID,
+		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(2 * time.Hour)),
@@ -44,13 +44,18 @@ func GenerateToken(userID uint, username string) (string, error) {
 }
 
 func ParseToken(tokenString string) (*UserClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-		_, ok := token.Method.(*jwt.SigningMethodHMAC)
-		if !ok {
-			return nil, errors.New("invalid token signing method")
-		}
-		return jwtkey, nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&UserClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			// _, ok := token.Method.(*jwt.SigningMethodHMAC)
+			// if !ok {
+			// 	return nil, errors.New("invalid token signing method")
+			// }
+			return jwtkey, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
 
 	if err != nil {
 		return nil, err
