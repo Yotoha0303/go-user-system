@@ -12,5 +12,4 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
-type UserStatusActive struct {
-}
+var UserStatusActive int8
