@@ -1,3 +1,4 @@
 .env
 config.local.yml
 config/config.txt
+.old
