@@ -89,5 +89,6 @@ func LoginHandler(c *gin.Context) {
 		"id":       user.ID,
 		"username": user.Username,
 		"nickname": user.Nickname,
+		"status":   user.Status,
 	})
 }
