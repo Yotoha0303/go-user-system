@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 )
 
 // 暂时写死，后续加入到全局文件中
@@ -14,6 +15,7 @@ import (
 var jwtkey []byte
 
 func InitJWTKey() {
+	_ = godotenv.Load()
 	key := os.Getenv("JWT_KEY")
 	if key == "" {
 		log.Fatal("JWT_KEY is not set")
