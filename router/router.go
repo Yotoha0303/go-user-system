@@ -2,6 +2,7 @@ package router
 
 import (
 	"go-user-system/api"
+	"go-user-system/middleware"
 	"go-user-system/utils"
 
 	"github.com/gin-gonic/gin"
@@ -17,5 +18,11 @@ func SetupRouter() *gin.Engine {
 	r.POST("/register", api.RegisterHandler)
 
 	r.POST("/login", api.LoginHandler)
+
+	authGrop := r.Group("/")
+	authGrop.Use(middleware.AuthMiddleware())
+	{
+		authGrop.GET("/me", api.MeHandler)
+	}
 	return r
 }

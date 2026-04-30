@@ -85,10 +85,29 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	token, err := utils.GenerateToken(uint(user.ID), user.Username)
+	if err != nil {
+		utils.Fail(c, 500, 2005, "generate token failed")
+		return
+	}
+
 	utils.Success(c, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"nickname": user.Nickname,
-		"status":   user.Status,
+		"access_token": token,
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"nickname": user.Nickname,
+			"status":   user.Status,
+		},
+	})
+}
+
+func MeHandler(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	username, _ := c.Get("username")
+
+	utils.Success(c, gin.H{
+		"user_id":  userID,
+		"username": username,
 	})
 }
