@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"go-user-system/service"
 	"go-user-system/utils"
 
@@ -31,17 +32,18 @@ func RegisterHandler(c *gin.Context) {
 	// }
 
 	if err := service.Register(req.Username, req.Password); err != nil {
-		switch err.Error() {
-		case "username is empty", "password is empty", "username too short", "password too short":
+		switch {
+		case errors.Is(err, service.ErrUsernameEmpty),
+			errors.Is(err, service.ErrPasswordEmpty),
+			errors.Is(err, service.ErrUsernameTooShort),
+			errors.Is(err, service.ErrPasswordTooShort):
 			utils.Fail(c, 400, 1001, err.Error())
-			return
-		case "username already exists":
+		case errors.Is(err, service.ErrUsernameExists):
 			utils.Fail(c, 400, 1002, err.Error())
-			return
 		default:
 			utils.Fail(c, 500, 1003, "register failed")
-			return
 		}
+		return
 	}
 
 	utils.Success(c, nil)
@@ -56,15 +58,36 @@ func LoginHandler(c *gin.Context) {
 	}
 
 	//2、service层处理login请求
-	if err := service.Login(req.Username, req.Password); err != nil {
+	user, err := service.Login(req.Username, req.Password)
+	if err != nil {
 		//错误情况：账户不存在、密码错误、该账户已经禁用
-		switch err.Error() {
-		case "":
-			return
+		// switch err.Error() {
+		// case "username is not exist", "password is failed", "this account is ben":
+		// 	return
+		// default:
+		// 	utils.Fail(c, 500, 1003, "login exists unknow error")
+		// 	return
+		// }
+
+		//改
+		switch {
+		case errors.Is(err, service.ErrUsernameEmpty),
+			errors.Is(err, service.ErrPasswordEmpty):
+			utils.Fail(c, 400, 1001, err.Error())
+		case errors.Is(err, service.ErrUserNotFound),
+			errors.Is(err, service.ErrPasswordWrong):
+			utils.Fail(c, 400, 1004, "username or password incorrect")
+		case errors.Is(err, service.ErrUserDisabled):
+			utils.Fail(c, 403, 1005, "user disabled")
 		default:
-			return
+			utils.Fail(c, 500, 1006, "login failed")
 		}
+		return
 	}
 
-	utils.Success(c, nil)
+	utils.Success(c, gin.H{
+		"id":       user.ID,
+		"username": user.Username,
+		"nickname": user.Nickname,
+	})
 }
