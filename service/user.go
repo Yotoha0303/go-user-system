@@ -14,10 +14,6 @@ import (
 
 func Register(username, password string) error {
 
-	// if username == "" || password == "" {
-	// 	return errors.New("username or password is empty")
-	// }
-
 	username = strings.TrimSpace(username)
 	if username == "" {
 		return errors.New("username is empty")
@@ -60,4 +56,20 @@ func GetUserByUsername(db *gorm.DB, username string) (*model.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// 登录方法;返回账户信息
+func Login(username, password string) error {
+	//1、账户是否存在
+	_, err := dao.GetUserByUsername(global.DB, username)
+	if err != nil {
+		errors.New("username is not exist")
+	}
+	//2、密码是否错误
+	dao.PasswordIsFailed(global.DB, username, password)
+
+	//3、账户是否被禁用
+	dao.AccountIsDisabled(global.DB, username)
+
+	return nil
 }
