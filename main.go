@@ -7,6 +7,7 @@ import (
 	"go-user-system/global"
 	"go-user-system/model"
 	"go-user-system/router"
+	"go-user-system/utils"
 	"log"
 )
 
@@ -17,6 +18,7 @@ import (
 // }
 
 func main() {
+	utils.InitJWTKey()
 	db, err := dao.InitDB()
 
 	if err != nil {
