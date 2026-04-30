@@ -3,7 +3,6 @@ package router
 import (
 	"go-user-system/api"
 	"go-user-system/middleware"
-	"go-user-system/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,18 +10,22 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	r.GET("/ping", func(c *gin.Context) {
-		utils.Success(c, gin.H{"message": "pong"})
-	})
-
-	r.POST("/register", api.RegisterHandler)
-
-	r.POST("/login", api.LoginHandler)
-
-	authGrop := r.Group("/")
-	authGrop.Use(middleware.AuthMiddleware())
+	apiV1 := r.Group("/api/v1")
 	{
-		authGrop.GET("/me", api.MeHandler)
+		// r.GET("/ping", func(c *gin.Context) {
+		// 	utils.Success(c, gin.H{"message": "pong"})
+		// })
+
+		apiV1.POST("/register", api.RegisterHandler)
+
+		apiV1.POST("/login", api.LoginHandler)
+
+		authGrop := apiV1.Group("/")
+		authGrop.Use(middleware.AuthMiddleware())
+		{
+			authGrop.GET("/me", api.MeHandler)
+		}
 	}
+
 	return r
 }
