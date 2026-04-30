@@ -16,9 +16,9 @@ var jwtkey []byte
 
 func InitJWTKey() {
 	_ = godotenv.Load()
-	key := os.Getenv("JWT_KEY")
+	key := os.Getenv("JWT_SECRET")
 	if key == "" {
-		log.Fatal("JWT_KEY is not set")
+		log.Fatal("JWT_SECRET is not set")
 	}
 	jwtkey = []byte(key)
 }

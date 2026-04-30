@@ -18,6 +18,6 @@ type User struct {
 }
 
 //GORM 默认会把 User 映射成 users;自定义表名
-func (User) tableName() string {
+func (User) TableName() string {
 	return "users"
 }

@@ -55,7 +55,7 @@ func Register(username, password string) error {
 		Username:     username,
 		PasswordHash: string(hashBytes),
 		Nickname:     username,
-		Status:       1,
+		Status:       model.UserStatusActive,
 	}
 	return dao.CreateUser(global.DB, &user)
 }
