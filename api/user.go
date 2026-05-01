@@ -25,12 +25,6 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	// err := service.Register(req.Username, req.Password)
-	// if err != nil {
-	// 	utils.Fail(c, 500, 1002, "注册失败")
-	// 	return
-	// }
-
 	if err := service.Register(req.Username, req.Password); err != nil {
 		switch {
 		case errors.Is(err, service.ErrUsernameEmpty),
@@ -50,26 +44,15 @@ func RegisterHandler(c *gin.Context) {
 }
 
 func LoginHandler(c *gin.Context) {
-	//1、前端会提供账号和密码，需要接受前端发送来的账户信息
-	var req LoginRequest //此处不复用注册时的结构体
+	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Fail(c, 400, 1001, "参数错误")
 		return
 	}
 
-	//2、service层处理login请求
 	user, err := service.Login(req.Username, req.Password)
 	if err != nil {
-		//错误情况：账户不存在、密码错误、该账户已经禁用
-		// switch err.Error() {
-		// case "username is not exist", "password is failed", "this account is ben":
-		// 	return
-		// default:
-		// 	utils.Fail(c, 500, 1003, "login exists unknow error")
-		// 	return
-		// }
 
-		//改
 		switch {
 		case errors.Is(err, service.ErrUsernameEmpty),
 			errors.Is(err, service.ErrPasswordEmpty):
@@ -85,7 +68,7 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.GenerateToken(uint(user.ID), user.Username)
+	token, err := utils.GenerateToken(user.ID, user.Username)
 	if err != nil {
 		utils.Fail(c, 500, 2005, "generate token failed")
 		return
@@ -103,11 +86,28 @@ func LoginHandler(c *gin.Context) {
 }
 
 func MeHandler(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	username, _ := c.Get("username")
+	v, exists := c.Get("user_id")
+	if !exists {
+		utils.Fail(c, 401, 3004, "user context missing")
+		return
+	}
+
+	userID, ok := v.(int64)
+	if !ok {
+		utils.Fail(c, 500, 3005, "invalid user context")
+		return
+	}
+
+	user, err := service.GetProfile(userID)
+	if err != nil {
+		utils.Fail(c, 500, 3006, "get user profile failed")
+		return
+	}
 
 	utils.Success(c, gin.H{
-		"user_id":  userID,
-		"username": username,
+		"id":       user.ID,
+		"username": user.Username,
+		"nickname": user.Nickname,
+		"status":   user.Status,
 	})
 }

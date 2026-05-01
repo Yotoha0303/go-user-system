@@ -32,8 +32,6 @@ func main() {
 
 	cfg, err := config.Load("config.yml")
 	if err != nil {
-		// 程序崩溃，不可修复类型的报错
-		// panic(fmt.Sprintf("load config failed: %v", err))
 		log.Fatalf("load config failed: %v", err)
 	}
 

@@ -19,26 +19,13 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// parts := strings.SplitN(authHeader, "", 2)
-		// if len(parts) != 2 || parts[0] != "Bearer" {
-		// 	utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
-		// 	c.Abort()
-		// 	return
-		// }
-
-		// claims, err := utils.ParseToken(parts[1])
-		// if err != nil {
-		// 	utils.Fail(c, http.StatusUnauthorized, 3003, "invalid token")
-		// 	c.Abort()
-		// 	return
-		// }
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		if !strings.HasPrefix(authHeader, "Yotoha ") {
 			utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Yotoha "))
 		if tokenString == "" {
 			utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
 			c.Abort()

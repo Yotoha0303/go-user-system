@@ -4,14 +4,13 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 )
 
-// 暂时写死，后续加入到全局文件中
-// var jwtkey = []byte(os.Getenv("JWT_KEY"))
 var jwtkey []byte
 
 func InitJWTKey() {
@@ -24,17 +23,23 @@ func InitJWTKey() {
 }
 
 type UserClaims struct {
-	UserID   uint   `json:"user_id"`
+	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID uint, username string) (string, error) {
+func GenerateToken(userID int64, username string) (string, error) {
+	expireHoursStr := os.Getenv("JWT_EXPIRE_HOURS")
+	expireHours, err := strconv.Atoi(expireHoursStr)
+	if err != nil || expireHours <= 0 {
+		expireHours = 24
+	}
+
 	claims := UserClaims{
 		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(2 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "go-user-system",
 		},
@@ -48,10 +53,6 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 		tokenString,
 		&UserClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			// _, ok := token.Method.(*jwt.SigningMethodHMAC)
-			// if !ok {
-			// 	return nil, errors.New("invalid token signing method")
-			// }
 			return jwtkey, nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),

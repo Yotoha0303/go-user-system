@@ -12,10 +12,6 @@ func SetupRouter() *gin.Engine {
 
 	apiV1 := r.Group("/api/v1")
 	{
-		// r.GET("/ping", func(c *gin.Context) {
-		// 	utils.Success(c, gin.H{"message": "pong"})
-		// })
-
 		apiV1.POST("/register", api.RegisterHandler)
 
 		apiV1.POST("/login", api.LoginHandler)

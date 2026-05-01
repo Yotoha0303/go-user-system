@@ -74,6 +74,7 @@ go mod tidy
 go run main.go
 
 ## 8. 接口说明
+接口使用示例：localhost:port + /api/v1 + 请求
 
 POST /register
 

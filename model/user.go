@@ -17,7 +17,6 @@ type User struct {
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-//GORM 默认会把 User 映射成 users;自定义表名
 func (User) TableName() string {
 	return "users"
 }

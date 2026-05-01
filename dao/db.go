@@ -13,7 +13,6 @@ func InitDB() (*gorm.DB, error) {
 	//允许加载错误
 	_ = godotenv.Load()
 
-	//不允许加载出错
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbHost := os.Getenv("DB_HOST")
