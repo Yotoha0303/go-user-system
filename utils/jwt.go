@@ -2,7 +2,6 @@ package utils
 
 import (
 	"errors"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -13,13 +12,16 @@ import (
 
 var jwtkey []byte
 
-func InitJWTKey() {
+func InitJWTKey() error {
 	_ = godotenv.Load()
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {
-		log.Fatal("JWT_SECRET is not set")
+		//	utils层不处理报错
+		// log.Fatal("JWT_SECRET is not set")
+		return errors.New("JWT_SECRET is not set")
 	}
 	jwtkey = []byte(key)
+	return nil
 }
 
 type UserClaims struct {

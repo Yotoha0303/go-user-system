@@ -18,7 +18,9 @@ import (
 // }
 
 func main() {
-	utils.InitJWTKey()
+	if err := utils.InitJWTKey(); err != nil {
+		log.Fatalf("init jwt key failed: %v", err)
+	}
 	db, err := dao.InitDB()
 
 	if err != nil {
