@@ -74,9 +74,17 @@ go mod tidy
 go run main.go
 
 ## 8. 接口说明
-接口使用示例：localhost:port + /api/v1 + 请求
+GET /ping
 
-POST /register
+相应
+
+```
+{
+  "message":"success"
+}
+```
+
+POST /api/v1/register
 
 请求：
 
@@ -97,7 +105,7 @@ POST /register
 }
 ```
 
-POST /login
+POST /api/v1/login
 
 请求：
 
@@ -120,7 +128,7 @@ POST /login
 }
 ```
 
-GET /me
+GET /api/v1/me
 
 Header：
 
