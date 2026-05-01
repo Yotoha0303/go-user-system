@@ -13,6 +13,7 @@ import (
 var jwtkey []byte
 
 func InitJWTKey() error {
+	//启动JWT时，随手启动getenv
 	_ = godotenv.Load()
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {

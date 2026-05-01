@@ -19,13 +19,13 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, "Yotoha ") {
-			utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization Bearer")
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Yotoha "))
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 		if tokenString == "" {
 			utils.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
 			c.Abort()

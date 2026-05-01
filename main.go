@@ -44,6 +44,6 @@ func main() {
 
 	err = r.Run(addr)
 	if err != nil {
-		panic(fmt.Sprintf("server run failed: %v", err))
+		log.Fatalf("server run failed: %v", err)
 	}
 }

@@ -53,7 +53,7 @@ global/     全局资源，如 DB
 
 ```text
 CREATE TABLE `users`  (
-  `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
+  `id` bigint NOT NULL AUTO_INCREMENT,
   `username` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `nickname` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '',
@@ -63,6 +63,7 @@ CREATE TABLE `users`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `idx_username`(`username` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+
 
 ```
 
@@ -87,7 +88,7 @@ go run main.go
 ## 8. 接口说明
 GET /ping
 
-相应
+响应
 
 ```
 {
@@ -134,7 +135,13 @@ POST /api/v1/login
   "code": 0,
   "msg": "success",
   "data": {
-    "token": "xxx"
+    "access_token": "xxx",
+    "user": {
+      "id": 1,
+      "username": "yotoha",
+      "nickname": "yotoha",
+      "status": 1
+    }
   }
 }
 ```
