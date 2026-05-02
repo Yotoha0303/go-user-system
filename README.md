@@ -48,6 +48,7 @@ router/     路由注册
 utils/      工具函数，如统一响应、JWT 工具
 config/     YAML 配置加载
 global/     全局资源，如 DB
+```
 
 ## 5. SQL结构
 
@@ -96,7 +97,7 @@ GET /ping
 }
 ```
 
-POST /api/v1/register
+POST /api/v1/auth/register
 
 请求：
 
@@ -117,7 +118,7 @@ POST /api/v1/register
 }
 ```
 
-POST /api/v1/login
+POST /api/v1/auth/login
 
 请求：
 
@@ -146,7 +147,7 @@ POST /api/v1/login
 }
 ```
 
-GET /api/v1/me
+GET /api/v1/users/me
 
 Header：
 

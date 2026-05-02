@@ -11,25 +11,55 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	//测试接口
+	registerHealthRoutes(r)
+	registerAPIRouter(r)
+
+	// apiV1 := r.Group("/api/v1")
+	// {
+	// 	apiV1.POST("/register", api.RegisterHandler)
+
+	// 	apiV1.POST("/login", api.LoginHandler)
+
+	// 	authGrop := apiV1.Group("")
+	// 	authGrop.Use(middleware.AuthMiddleware())
+	// 	{
+	// 		authGrop.GET("/me", api.MeHandler)
+	// 		authGrop.PUT("/me/profile", api.UpdateProfileHandler)
+	// 	}
+	// }
+
+	return r
+}
+
+func registerHealthRoutes(r *gin.Engine) {
 	r.GET("/ping", func(c *gin.Context) {
 		utils.Success(c, gin.H{
 			"message": "success",
 		})
 	})
+}
 
-	apiV1 := r.Group("/api/v1")
+func registerAPIRouter(rg *gin.Engine) {
+	apiV1 := rg.Group("/api/v1")
+
+	registerAuthRouter(apiV1)
+	registerUsersRouter(apiV1)
+}
+
+func registerAuthRouter(rg *gin.RouterGroup) {
+	auth := rg.Group("/auth")
 	{
-		apiV1.POST("/register", api.RegisterHandler)
+		auth.POST("/register", api.RegisterHandler)
+		auth.POST("/login", api.LoginHandler)
 
-		apiV1.POST("/login", api.LoginHandler)
-
-		authGrop := apiV1.Group("")
-		authGrop.Use(middleware.AuthMiddleware())
-		{
-			authGrop.GET("/me", api.MeHandler)
-		}
 	}
+}
 
-	return r
+func registerUsersRouter(rg *gin.RouterGroup) {
+	users := rg.Group("/users")
+	users.Use(middleware.AuthMiddleware())
+	{
+		users.GET("/me", api.MeHandler)
+		users.PUT("/me/profile", api.UpdateProfileHandler)
+	}
 }

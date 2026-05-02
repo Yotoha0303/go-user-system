@@ -111,3 +111,7 @@ func MeHandler(c *gin.Context) {
 		"status":   user.Status,
 	})
 }
+
+func UpdateProfileHandler(c *gin.Context) {
+
+}
