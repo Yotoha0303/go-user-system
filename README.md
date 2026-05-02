@@ -217,7 +217,7 @@ curl -X POST http://localhost:8082/api/v1/auth/login \
   -d '{"username":"yotoha","password":"123456"}'
 
 
-# 3、获取用户信息
+# 3、获取用户信息(备注：获取access_token需要先调用登录接口，再替换下面命令中的值)
 curl http://localhost:8082/api/v1/users/me \
   -H "Authorization: Bearer <access_token>"
 
@@ -227,6 +227,10 @@ curl -X PUT http://localhost:8082/api/v1/users/me/profile \
    -H "Content-Type: application/json" \
    -H "Authorization: Bearer <access_token>" \
    -d '{"nickname":"new_name"}'
+
+# 5、再次获取用户信息
+curl http://localhost:8082/api/v1/users/me \
+  -H "Authorization: Bearer <access_token>"
 
 ```
 
@@ -243,3 +247,5 @@ curl -X PUT http://localhost:8082/api/v1/users/me/profile \
 使用统一响应结构规范接口返回
 
 使用环境变量管理数据库和 JWT 配置，避免敏感信息硬编码
+
+## 11. 设计与实现要点
