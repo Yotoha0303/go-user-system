@@ -50,7 +50,7 @@ config/     YAML 配置加载
 global/     全局资源，如 DB
 ```
 
-## 5. SQL结构
+## 5. SQL 结构
 
 ```text
 CREATE TABLE `users`  (
@@ -82,11 +82,13 @@ JWT_EXPIRE_HOURS=24
 ```
 
 ## 7. 启动方式
+
 go mod tidy
 
 go run main.go
 
 ## 8. 接口说明
+
 GET /ping
 
 响应
@@ -105,7 +107,7 @@ POST /api/v1/auth/register
 {
   "username": "yotoha",
   "password": "123456"
-} 
+}
 ```
 
 响应：
@@ -168,7 +170,32 @@ Authorization: Bearer <token>
 }
 ```
 
+PUT /api/v1/users/me/profile
+
+Header：
+
+Authorization: Bearer <token>
+
+请求
+
+```
+{
+  "nickname":"new_name"
+}
+```
+
+响应：
+
+```
+{
+    "code": 0,
+    "msg": "success",
+    "data": null
+}
+```
+
 ## 9. 项目亮点
+
 使用分层结构拆分 API、Service、DAO、Model
 
 使用 bcrypt 存储密码哈希，避免明文密码入库
