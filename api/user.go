@@ -18,6 +18,10 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type UpdateProfileRequest struct {
+	Nickname string `json:"nickname"`
+}
+
 func RegisterHandler(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -61,7 +65,7 @@ func LoginHandler(c *gin.Context) {
 			errors.Is(err, service.ErrPasswordWrong):
 			utils.Fail(c, 400, 1004, "username or password incorrect")
 		case errors.Is(err, service.ErrUserDisabled):
-			utils.Fail(c, 403, 1005, "user disabled")
+			utils.Fail(c, 403, 1005, err.Error())
 		default:
 			utils.Fail(c, 500, 1006, "login failed")
 		}
@@ -113,5 +117,36 @@ func MeHandler(c *gin.Context) {
 }
 
 func UpdateProfileHandler(c *gin.Context) {
+	value, exists := c.Get("user_id")
+	if !exists {
+		utils.Fail(c, 400, 5001, "user_id not found in context")
+		return
+	}
 
+	userID, ok := value.(int64)
+	if !ok {
+		utils.Fail(c, 500, 5002, "invalid user_id type")
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, 400, 5003, "参数错误")
+		return
+	}
+
+	if err := service.UpdateNickname(userID, req.Nickname); err != nil {
+		switch {
+		case errors.Is(err, service.ErrNicknameEmpty),
+			errors.Is(err, service.ErrNicknameTooLong):
+			utils.Fail(c, 400, 5004, err.Error())
+		case errors.Is(err, service.ErrUserNotFound),
+			errors.Is(err, service.ErrUserDisabled):
+			utils.Fail(c, 400, 5005, err.Error())
+		default:
+			utils.Fail(c, 500, 5006, "update profile failed")
+		}
+		return
+	}
+	utils.Success(c, nil)
 }

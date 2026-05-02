@@ -26,3 +26,8 @@ func GetUserByID(db *gorm.DB, id int64) (*model.User, error) {
 	}
 	return &user, nil
 }
+
+func UpdateNicknameByID(db *gorm.DB, id int64, nickname string) error {
+
+	return db.Model(&model.User{}).Where("id = ?", id).Update("nickname", nickname).Error
+}

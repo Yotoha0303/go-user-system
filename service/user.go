@@ -21,6 +21,8 @@ var (
 	ErrUserNotFound     = errors.New("username not found")
 	ErrPasswordWrong    = errors.New("password incorrect")
 	ErrUserDisabled     = errors.New("user disabled")
+	ErrNicknameEmpty    = errors.New("nickname is empty")
+	ErrNicknameTooLong  = errors.New("nickname too long")
 )
 
 func Register(username, password string) error {
@@ -104,4 +106,28 @@ func GetProfile(userID int64) (*model.User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+func UpdateNickname(userID int64, nickname string) error {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return ErrNicknameEmpty
+	}
+	if len(nickname) > 64 {
+		return ErrNicknameTooLong
+	}
+
+	user, err := dao.GetUserByID(global.DB, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	if user.Status != model.UserStatusActive {
+		return ErrUserDisabled
+	}
+
+	return dao.UpdateNicknameByID(global.DB, userID, nickname)
 }

@@ -14,20 +14,6 @@ func SetupRouter() *gin.Engine {
 	registerHealthRoutes(r)
 	registerAPIRouter(r)
 
-	// apiV1 := r.Group("/api/v1")
-	// {
-	// 	apiV1.POST("/register", api.RegisterHandler)
-
-	// 	apiV1.POST("/login", api.LoginHandler)
-
-	// 	authGrop := apiV1.Group("")
-	// 	authGrop.Use(middleware.AuthMiddleware())
-	// 	{
-	// 		authGrop.GET("/me", api.MeHandler)
-	// 		authGrop.PUT("/me/profile", api.UpdateProfileHandler)
-	// 	}
-	// }
-
 	return r
 }
 
