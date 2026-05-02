@@ -7,18 +7,14 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
 )
 
 var jwtkey []byte
 
 func InitJWTKey() error {
-	//启动JWT时，随手启动getenv
-	_ = godotenv.Load()
+
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {
-		//	utils层不处理报错
-		// log.Fatal("JWT_SECRET is not set")
 		return errors.New("JWT_SECRET is not set")
 	}
 	jwtkey = []byte(key)

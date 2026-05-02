@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,6 +13,10 @@ type Config struct {
 
 type ServerConfig struct {
 	Port int `yaml:"port"`
+}
+
+func LoadEnv() {
+	_ = godotenv.Load()
 }
 
 func Load(path string) (*Config, error) {

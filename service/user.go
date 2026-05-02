@@ -105,6 +105,11 @@ func GetProfile(userID int64) (*model.User, error) {
 		}
 		return nil, err
 	}
+
+	if user.Status != model.UserStatusActive {
+		return nil, ErrUserDisabled
+	}
+
 	return user, nil
 }
 

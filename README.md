@@ -17,25 +17,25 @@
 
 ## 3. 核心功能
 
-1. 用户注册
+- 用户注册
 
-2. 用户登录
+- 用户登录
 
-3. bcrypt 密码哈希存储
+- bcrypt 密码哈希存储
 
-4. 用户状态校验
+- 用户状态校验
 
-5. JWT 生成
+- JWT 生成
 
-6. JWT 中间件鉴权
+- JWT 中间件鉴权
 
-7. GET /api/v1/me 当前用户信息
+- GET /api/v1/users/me 当前用户信息
 
-8. 统一响应结构
+- 统一响应结构
 
-9. 环境变量配置
+- 环境变量配置
 
-10. README + 接口文档
+- README + 接口文档
 
 ## 4. 项目结构
 
@@ -95,7 +95,11 @@ GET /ping
 
 ```
 {
-  "message":"success"
+    "code": 0,
+    "msg": "success",
+    "data": {
+        "message": "success"
+    }
 }
 ```
 
@@ -153,7 +157,7 @@ GET /api/v1/users/me
 
 Header：
 
-Authorization: Bearer <token>
+Authorization: Bearer <access_token>
 
 响应：
 
@@ -174,7 +178,7 @@ PUT /api/v1/users/me/profile
 
 Header：
 
-Authorization: Bearer <token>
+Authorization: Bearer <access_token>
 
 请求
 

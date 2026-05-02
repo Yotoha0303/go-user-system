@@ -11,16 +11,13 @@ import (
 	"log"
 )
 
-// type Config struct {
-// 	Server struct {
-// 		Port int `yaml:"port"`
-// 	} `yaml:"server`
-// }
-
 func main() {
+	config.LoadEnv()
+
 	if err := utils.InitJWTKey(); err != nil {
 		log.Fatalf("init jwt key failed: %v", err)
 	}
+
 	db, err := dao.InitDB()
 
 	if err != nil {

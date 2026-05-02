@@ -119,7 +119,7 @@ func MeHandler(c *gin.Context) {
 func UpdateProfileHandler(c *gin.Context) {
 	value, exists := c.Get("user_id")
 	if !exists {
-		utils.Fail(c, 400, 5001, "user_id not found in context")
+		utils.Fail(c, 401, 5001, "user_id not found in context")
 		return
 	}
 
@@ -140,11 +140,12 @@ func UpdateProfileHandler(c *gin.Context) {
 		case errors.Is(err, service.ErrNicknameEmpty),
 			errors.Is(err, service.ErrNicknameTooLong):
 			utils.Fail(c, 400, 5004, err.Error())
-		case errors.Is(err, service.ErrUserNotFound),
-			errors.Is(err, service.ErrUserDisabled):
-			utils.Fail(c, 400, 5005, err.Error())
+		case errors.Is(err, service.ErrUserDisabled):
+			utils.Fail(c, 403, 5005, err.Error())
+		case errors.Is(err, service.ErrUserNotFound):
+			utils.Fail(c, 404, 5006, err.Error())
 		default:
-			utils.Fail(c, 500, 5006, "update profile failed")
+			utils.Fail(c, 500, 5007, "update profile failed")
 		}
 		return
 	}
