@@ -46,10 +46,11 @@ api/        HTTP 接口层，负责参数绑定和响应返回
 service/    业务逻辑层，负责注册、登录、鉴权相关业务规则
 dao/        数据访问层，负责数据库操作
 model/      数据模型层，定义 User、Response 等结构
-router/     路由注册
+router/     路由注册、接口归类、版本管理、中间件挂载
 utils/      工具函数，如统一响应、JWT 工具
 config/     YAML 配置加载
 global/     全局资源，如 DB
+middleware/ 路由中间件
 ```
 
 ## 5. SQL 结构
@@ -238,7 +239,13 @@ Authorization: Bearer <access_token>
 }
 ```
 
-## 9. 项目亮点
+## 9. 手动测试流程
+
+```
+ping测试服务器状态->注册用户->登录用户->获取access_token中的数据->修改昵称->登录用户，查看更新后的昵称
+```
+
+## 10. 项目亮点
 
 使用分层结构拆分 API、Service、DAO、Model
 
@@ -251,7 +258,3 @@ Authorization: Bearer <access_token>
 使用统一响应结构规范接口返回
 
 使用环境变量管理数据库和 JWT 配置，避免敏感信息硬编码
-
-## 10. 当前状态
-
-该项目为 Go 后端基础项目，用于练习并展示用户系统、认证鉴权、接口设计、错误处理和基础工程结构。
