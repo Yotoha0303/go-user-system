@@ -94,12 +94,6 @@ go run main.go
 
 GET /ping
 
-示例
-
-```
-curl http://localhost:8082/ping
-```
-
 响应
 
 ```
@@ -113,14 +107,6 @@ curl http://localhost:8082/ping
 ```
 
 POST /api/v1/auth/register
-
-示例
-
-```
-curl -X POST http://localhost:8082/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"yotoha","password":"123456"}'
-```
 
 请求：
 
@@ -142,14 +128,6 @@ curl -X POST http://localhost:8082/api/v1/auth/register \
 ```
 
 POST /api/v1/auth/login
-
-示例
-
-```
-curl -X POST http://localhost:8082/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"yotoha","password":"123456"}'
-```
 
 请求：
 
@@ -180,13 +158,6 @@ curl -X POST http://localhost:8082/api/v1/auth/login \
 
 GET /api/v1/users/me
 
-示例
-
-```
-curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer <access_token>"
-```
-
 Header：
 
 Authorization: Bearer <access_token>
@@ -207,15 +178,6 @@ Authorization: Bearer <access_token>
 ```
 
 PUT /api/v1/users/me/profile
-
-示例
-
-```
-curl -X PUT http://localhost:8082/api/v1/users/me/profile \
-   -H "Content-Type: application/json" \
-   -H "Authorization: Bearer <access_token>" \
-   -d '{"nickname":"new_name"}'
-```
 
 Header：
 
@@ -242,7 +204,30 @@ Authorization: Bearer <access_token>
 ## 9. 手动测试流程
 
 ```
-ping测试服务器状态->注册用户->登录用户->获取access_token中的数据->修改昵称->登录用户，查看更新后的昵称
+# 1、注册
+  示例
+
+curl -X POST http://localhost:8082/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"yotoha","password":"123456"}'
+
+# 2、登录
+curl -X POST http://localhost:8082/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"yotoha","password":"123456"}'
+
+
+# 3、获取用户信息
+curl http://localhost:8082/api/v1/users/me \
+  -H "Authorization: Bearer <access_token>"
+
+
+# 4、修改昵称
+curl -X PUT http://localhost:8082/api/v1/users/me/profile \
+   -H "Content-Type: application/json" \
+   -H "Authorization: Bearer <access_token>" \
+   -d '{"nickname":"new_name"}'
+
 ```
 
 ## 10. 项目亮点
