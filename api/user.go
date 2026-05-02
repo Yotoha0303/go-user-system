@@ -104,7 +104,14 @@ func MeHandler(c *gin.Context) {
 
 	user, err := service.GetProfile(userID)
 	if err != nil {
-		utils.Fail(c, 500, 3006, "get user profile failed")
+		switch {
+		case errors.Is(err, service.ErrUserNotFound):
+			utils.Fail(c, 404, 3006, err.Error())
+		case errors.Is(err, service.ErrUserDisabled):
+			utils.Fail(c, 403, 3007, err.Error())
+		default:
+			utils.Fail(c, 500, 3008, "get user profile failed")
+		}
 		return
 	}
 

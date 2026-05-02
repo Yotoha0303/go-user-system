@@ -23,6 +23,7 @@ var (
 	ErrUserDisabled     = errors.New("user disabled")
 	ErrNicknameEmpty    = errors.New("nickname is empty")
 	ErrNicknameTooLong  = errors.New("nickname too long")
+	ErrInvalidUserID    = errors.New("userID is not empty")
 )
 
 func Register(username, password string) error {
@@ -94,8 +95,8 @@ func Login(username, password string) (*model.User, error) {
 }
 
 func GetProfile(userID int64) (*model.User, error) {
-	if userID == 0 {
-		return nil, errors.New("userID is not empty")
+	if userID <= 0 {
+		return nil, ErrInvalidUserID
 	}
 
 	user, err := dao.GetUserByID(global.DB, userID)
