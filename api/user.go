@@ -63,7 +63,7 @@ func LoginHandler(c *gin.Context) {
 			utils.Fail(c, 400, 1001, err.Error())
 		case errors.Is(err, service.ErrUserNotFound),
 			errors.Is(err, service.ErrPasswordWrong):
-			utils.Fail(c, 400, 1004, "username or password incorrect")
+			utils.Fail(c, 400, 1004, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
 			utils.Fail(c, 403, 1005, err.Error())
 		default:
