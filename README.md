@@ -1,8 +1,8 @@
-# go-user-system（Go 用户认证系统）
+# go-user-system（Go 认证与基础用户系统项目）
 
 ## 1. 项目简介
 
-基于 Go + Gin + GORM + MySQL 实现的用户系统，包含用户注册、登录、密码哈希、JWT 鉴权、受保护接口等基础后端能力。
+基于 Go + Gin + GORM + MySQL 实现用户认证系统，支持注册、登录、bcrypt 密码哈希、JWT 鉴权、当前用户信息查询和昵称修改。项目采用 api/service/ dao/ model/ 分层结构，使用环境变量管理数据库与 JWT 配置，并通过统一响应结构和业务错误映射提升接口规范性。
 
 ## 2. 技术栈
 
@@ -20,6 +20,8 @@
 - 用户注册
 
 - 用户登录
+
+- 修改昵称
 
 - bcrypt 密码哈希存储
 
@@ -70,7 +72,7 @@ CREATE TABLE `users`  (
 
 ## 6. 环境变量
 
-```text
+```.env
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
@@ -91,6 +93,12 @@ go run main.go
 
 GET /ping
 
+示例
+
+```
+curl http://localhost:8082/ping
+```
+
 响应
 
 ```
@@ -104,6 +112,14 @@ GET /ping
 ```
 
 POST /api/v1/auth/register
+
+示例
+
+```
+curl -X POST http://localhost:8082/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"yotoha","password":"123456"}'
+```
 
 请求：
 
@@ -125,6 +141,14 @@ POST /api/v1/auth/register
 ```
 
 POST /api/v1/auth/login
+
+示例
+
+```
+curl -X POST http://localhost:8082/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"yotoha","password":"123456"}'
+```
 
 请求：
 
@@ -155,6 +179,13 @@ POST /api/v1/auth/login
 
 GET /api/v1/users/me
 
+示例
+
+```
+curl http://localhost:8082/api/v1/users/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
 Header：
 
 Authorization: Bearer <access_token>
@@ -175,6 +206,15 @@ Authorization: Bearer <access_token>
 ```
 
 PUT /api/v1/users/me/profile
+
+示例
+
+```
+curl -X PUT http://localhost:8082/api/v1/users/me/profile \
+   -H "Content-Type: application/json" \
+   -H "Authorization: Bearer <access_token>" \
+   -d '{"nickname":"new_name"}'
+```
 
 Header：
 
