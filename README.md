@@ -286,76 +286,83 @@ curl http://localhost:8082/api/v1/users/me \
 
 ### 1. 分层结构设计
 
-```
 本项目采用 `api/ service/ dao/ model/ middleware/ utils/ config/`的分层结构，将 HTTP 请求处理、业务逻辑、数据访问和通用工具拆开。
 
 这样做的原因是避免所有逻辑都堆积在 handler 中，方便后续的扩展。
 
-`api`层只负责参数绑定和响应返回；
-`service`层负责处理业务逻辑，如注册、登录、用户状态判定和修改昵称等业务规则；
-`dao`层只负责数据库访问；
-`model`层只负责定义实体和通用响应结构；
-`middleware`层是中间件层，用于`router`层挂载中间件;
-`utils`层用于声明各层之间的通用工具;
-`config`是项目的配置入口，用于读取项目配置所需的参数。
+- `api` 层负责参数绑定、调用 service、返回统一响应
+- `service` 层负责注册、登录、用户状态判断、昵称修改等业务规则
+- `dao` 层只负责数据库访问，不处理密码校验和用户状态判断
+- `model` 层定义用户实体、状态常量和通用响应结构
+- `middleware` 层负责 JWT 鉴权等横切逻辑
+- `utils` 层封装统一响应、JWT 等通用工具函数
+- `config` 层负责读取配置和加载环境变量
 
 这种拆分避免项目各层之间耦合，让代码职责更清晰。
 
-```
-
 ### 2. 路由分组设计
 
-```
 本项目采用 `/api/v1` 作为接口前缀，并将认证接口 `auth` 和用户资源 `users` 进行接口分组：
 
+```
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/users/me`
 - `PUT /api/v1/users/me/profile`
 
-其中，`/auth` 负责注册和登录，`/users`负责当前用户相关的操作。需要登录的用户接口统一挂载JWT鉴权中间件，
-避免每个 handler 中重复编写 access_token 校验逻辑。
 ```
+
+其中，`/auth` 负责注册和登录，`/users`负责当前用户相关的操作。需要登录的用户接口统一挂载 JWT 鉴权中间件，
+
+避免每个 handler 中重复编写 access_token 校验逻辑。
 
 ### 3. 用户注册与密码哈希
 
-```
 在本项目的注册流程中，`service` 层会先校验用户名和密码，再通过 `dao` 层检查用户名是否已经存在。
+
 密码不会以明文的形式保存在数据库中，而是通过 bcrypt 生成哈希后写入 `password_hash` 字段。
 
 注册流程：
+
+```text
 客户端提交用户名和密码：
 -> api 层绑定 JSON 参数
 -> service 层校验参数
 -> dao 层检查用户名是否已经存在
 -> bcrypt 生成密码哈希
 -> dao 层创建用户记录
--> mysql 保存数据
+-> GORM/MySQL 持久化用户数据
 -> api 统一响应
 ```
 
-### 4. 用户登录与 JWT 鉴权
+### 4. 用户登录与 JWT 生成
 
-```
-在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户密码是否和数据库中的密码哈希是否相互匹配。
-`api` 层会调用 `middleware` 层生成 JWT ，并返回 access_token ，最后会将部分用户信息和 access_token 进行返回。
+在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户
+
+密码是否和数据库中的密码哈希是否相互匹配。
+
+登录成功后，`api` 层会调用 JWT 工具生成并返回 access_token 给客户端。
 
 登录流程：
+
+```
 客户端提交用户名和密码：
 -> api 层绑定 JSON 参数
--> service 层校验参数，依次查询用户名、判断用户状态、bcrypt 校验密码
--> middleware 层生成 JWT 返回 access_token
--> api 将部分用户信息和 access_token 返回
+-> service 层查询用户、判断状态、校验密码
+-> utils 层生成 JWT
+-> api 层返回 access_token 和 基础用户信息
 
 ```
 
 ### 5. 受保护接口与用户上下文
 
-```
 本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
-Authorization:Bearer <access_token>
+
+Authorization: Bearer <access_token>
 
 该中间件的主要流程为：
+
+```
 读取 Authorization Header
 -> 解析并验证 JWT
 -> 检验token是否有效或者过期
@@ -365,37 +372,47 @@ Authorization:Bearer <access_token>
 
 ### 6. 当前用户查询与状态校验
 
-```
-受保护接口不会直接通过请求中的 access_token 中返回的 user_id、username 直接进行业务操作，而是会通过 `middleware` 层进行 JWT 校验之后，才会根据 user_id 查询用户记录
+受保护接口不会依赖 access_token 中的信息，而是会通过 JWT 校验 access_token 后，才会将 user_id 写入 gin.Context，
+
+随后在 api 层取出 user_id 后，再调用 service 层查询用户记录，并判断用户状态
 
 查询用户和状态的流程：
+
+```
 读取 Authorization Header
--> middleware 层判断 access_token 是否存在，且无过期
--> service 层读取 Context 中的 user_id、username
--> service 层通过 user_id 查询用户记录
--> service 层判断该用户是否存在、是否被禁用
+-> middleware 层判断 access_token 是否存在、有效、未过期
+-> middleware 层判断 user_id 写入 gin.Context
+-> api 层从 Context 取出 user_id
+-> api 层把 user_id 作为参数传递给 service
+-> service 层根据 user_id 查询用户记录
+-> service 层判断用户是否存在、是否被禁用
+-> api 层返回用户信息或错误响应
 ```
 
 ### 7.统一响应与错误处理
 
-```
-本项目使用统一响应结构，通过该响应结构返回结果状态、业务数据、报错信息，即
+本项目使用统一响应结构返回接口内容:
 
+```
 {
   "code":0,
   "msg":"success",
-  "data":nill
+  "data":null
 }
-
-其中，code 表示业务错误码，msg 表示成功或错误信息，data 返回具体的业务数据
 ```
+
+其中：
+`code`表示业务错误码
+`msg`表示成功或错误信息
+`data`返回具体的业务数据
 
 ### 8. 配置与敏感信息管理
 
-本项目采用 .env 配合 gotenv 读取信息，并通过 .gitgnore 忽略该配置上传
-其中，提供 `.env.example` 作为配置模板
+本项目采用 .env 配合 godotenv 读取本地环境变量，并通过 .gitignore 忽略真实 .env 文件，避免敏感配置被提交到项目仓库
 
-```.env 
+其中，本项目提供 `.env.example` 作为配置模板：
+
+```.env
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
