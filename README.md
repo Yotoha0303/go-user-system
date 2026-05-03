@@ -159,8 +159,9 @@ POST /api/v1/auth/login
 GET /api/v1/users/me
 
 Header：
-
+```
 Authorization: Bearer <access_token>
+```
 
 响应：
 
@@ -180,8 +181,9 @@ Authorization: Bearer <access_token>
 PUT /api/v1/users/me/profile
 
 Header：
-
+```
 Authorization: Bearer <access_token>
+```
 
 请求
 
@@ -234,21 +236,7 @@ curl http://localhost:8082/api/v1/users/me \
 
 ```
 
-## 10. 项目亮点
-
-使用分层结构拆分 API、Service、DAO、Model
-
-使用 bcrypt 存储密码哈希，避免明文密码入库
-
-使用 JWT 实现无状态登录鉴权
-
-使用中间件保护用户信息接口
-
-使用统一响应结构规范接口返回
-
-使用环境变量管理数据库和 JWT 配置，避免敏感信息硬编码
-
-## 11. 最终自测清单
+## 10. 最终自测清单
 
 ### 服务与环境
 
@@ -282,7 +270,7 @@ curl http://localhost:8082/api/v1/users/me \
 - [x] `PUT /api/v1/users/me/profile` 修改昵称成功
 - [x] 修改昵称后再次查询，返回最新昵称
 
-## 12. 设计与实现要点
+## 11. 设计与实现要点
 
 ### 1. 分层结构设计
 
@@ -304,13 +292,11 @@ curl http://localhost:8082/api/v1/users/me \
 
 本项目采用 `/api/v1` 作为接口前缀，并将认证接口 `auth` 和用户资源 `users` 进行接口分组：
 
-```
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/users/me`
 - `PUT /api/v1/users/me/profile`
 
-```
 
 其中，`/auth` 负责注册和登录，`/users`负责当前用户相关的操作。需要登录的用户接口统一挂载 JWT 鉴权中间件，
 
@@ -357,8 +343,9 @@ curl http://localhost:8082/api/v1/users/me \
 ### 5. 受保护接口与用户上下文
 
 本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
-
+```
 Authorization: Bearer <access_token>
+```
 
 该中间件的主要流程为：
 
@@ -381,7 +368,7 @@ Authorization: Bearer <access_token>
 ```
 读取 Authorization Header
 -> middleware 层判断 access_token 是否存在、有效、未过期
--> middleware 层判断 user_id 写入 gin.Context
+-> middleware 层将 user_id 写入 gin.Context
 -> api 层从 Context 取出 user_id
 -> api 层把 user_id 作为参数传递给 service
 -> service 层根据 user_id 查询用户记录
@@ -403,8 +390,13 @@ Authorization: Bearer <access_token>
 
 其中：
 `code`表示业务错误码
+
 `msg`表示成功或错误信息
+
 `data`返回具体的业务数据
+
+HTTP 状态码用于表示请求层结果，业务 code 用于表示具体业务错误类型。
+
 
 ### 8. 配置与敏感信息管理
 
