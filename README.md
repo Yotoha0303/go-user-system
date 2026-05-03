@@ -352,9 +352,56 @@ curl http://localhost:8082/api/v1/users/me \
 ### 5. 受保护接口与用户上下文
 
 ```
+本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
+Authorization:Bearer <access_token>
 
+该中间件的主要流程为：
+读取 Authorization Header
+-> 解析并验证 JWT
+-> 检验token是否有效或者过期
+-> 将 user_id、username 写入 gin.Context
+-> 后续 handler 从 Context 中获取当前用户身份
 ```
 
-### 6. 统一响应与错误处理
+### 6. 当前用户查询与状态校验
 
-### 7. 配置与敏感信息管理
+```
+受保护接口不会直接通过请求中的 access_token 中返回的 user_id、username 直接进行业务操作，而是会通过 `middleware` 层进行 JWT 校验之后，才会根据 user_id 查询用户记录
+
+查询用户和状态的流程：
+读取 Authorization Header
+-> middleware 层判断 access_token 是否存在，且无过期
+-> service 层读取 Context 中的 user_id、username
+-> service 层通过 user_id 查询用户记录
+-> service 层判断该用户是否存在、是否被禁用
+```
+
+### 7.统一响应与错误处理
+
+```
+本项目使用统一响应结构，通过该响应结构返回结果状态、业务数据、报错信息，即
+
+{
+  "code":0,
+  "msg":"success",
+  "data":nill
+}
+
+其中，code 表示业务错误码，msg 表示成功或错误信息，data 返回具体的业务数据
+```
+
+### 8. 配置与敏感信息管理
+
+本项目采用 .env 配合 gotenv 读取信息，并通过 .gitgnore 忽略该配置上传
+其中，提供 `.env.example` 作为配置模板
+
+```.env 
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=go_user_system
+
+JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+JWT_EXPIRE_HOURS=24
+```
