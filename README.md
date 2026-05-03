@@ -2,17 +2,26 @@
 
 ## 1. 项目简介
 
-基于 Go + Gin + GORM + MySQL 实现用户认证系统，支持注册、登录、bcrypt 密码哈希、JWT 鉴权、当前用户信息查询和昵称修改。项目采用 api/service/ dao/ model/ 分层结构，使用环境变量管理数据库与 JWT 配置，并通过统一响应结构和业务错误映射提升接口规范性。
+基于 Go + Gin + GORM + MySQL 实现用户认证系统，支持注册、登录、bcrypt 密码哈希、JWT 鉴权、当前用户信息查询和昵称修改。
+
+项目采用 api/service/ dao/ model/ 分层结构，使用环境变量管理数据库与 JWT 配置，并通过统一响应结构和业务错误映射提升接口规范性。
 
 ## 2. 技术栈
 
 - Go
+
 - Gin
+
 - GORM
+
 - MySQL
+
 - bcrypt
+
 - JWT
+
 - godotenv
+
 - YAML 配置
 
 ## 3. 核心功能
@@ -159,6 +168,7 @@ POST /api/v1/auth/login
 GET /api/v1/users/me
 
 Header：
+
 ```
 Authorization: Bearer <access_token>
 ```
@@ -181,6 +191,7 @@ Authorization: Bearer <access_token>
 PUT /api/v1/users/me/profile
 
 Header：
+
 ```
 Authorization: Bearer <access_token>
 ```
@@ -241,33 +252,45 @@ curl http://localhost:8082/api/v1/users/me \
 ### 服务与环境
 
 - [x] `.env` 配置正确，项目可正常启动
+
 - [x] `GET /ping` 返回 Http 200，且响应体 code = 0，响应结构符合统一格式
 
 ### 注册
 
 - [x] 正常注册成功
+
 - [x] 用户名为空时返回正确错误
+
 - [x] 用户名过短时返回正确错误
+
 - [x] 重复注册时返回正确错误
 
 ### 登录
 
 - [x] 正常登录成功，返回 `access_token`
+
 - [x] 用户不存在时返回正确错误
+
 - [x] 密码错误时返回正确错误
+
 - [x] 被禁用用户无法登录
 
 ### JWT 鉴权
 
 - [x] 不带 token 访问 `/api/v1/users/me` 被拦截
+
 - [x] 错误格式的 Authorization 头被拦截
+
 - [x] 无效 token 被拦截
+
 - [x] 正确 token 可访问 `/api/v1/users/me`
 
 ### 用户信息
 
 - [x] `/api/v1/users/me` 返回当前用户信息
+
 - [x] `PUT /api/v1/users/me/profile` 修改昵称成功
+
 - [x] 修改昵称后再次查询，返回最新昵称
 
 ## 11. 设计与实现要点
@@ -279,11 +302,17 @@ curl http://localhost:8082/api/v1/users/me \
 这样做的原因是避免所有逻辑都堆积在 handler 中，方便后续的扩展。
 
 - `api` 层负责参数绑定、调用 service、返回统一响应
+
 - `service` 层负责注册、登录、用户状态判断、昵称修改等业务规则
+
 - `dao` 层只负责数据库访问，不处理密码校验和用户状态判断
+
 - `model` 层定义用户实体、状态常量和通用响应结构
+
 - `middleware` 层负责 JWT 鉴权等横切逻辑
+
 - `utils` 层封装统一响应、JWT 等通用工具函数
+
 - `config` 层负责读取配置和加载环境变量
 
 这种拆分避免项目各层之间耦合，让代码职责更清晰。
@@ -293,8 +322,11 @@ curl http://localhost:8082/api/v1/users/me \
 本项目采用 `/api/v1` 作为接口前缀，并将认证接口 `auth` 和用户资源 `users` 进行接口分组：
 
 - `POST /api/v1/auth/register`
+
 - `POST /api/v1/auth/login`
+
 - `GET /api/v1/users/me`
+
 - `PUT /api/v1/users/me/profile`
 
 
@@ -323,7 +355,9 @@ curl http://localhost:8082/api/v1/users/me \
 
 ### 4. 用户登录与 JWT 生成
 
-在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户
+在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，
+
+而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户
 
 密码是否和数据库中的密码哈希是否相互匹配。
 
@@ -343,6 +377,7 @@ curl http://localhost:8082/api/v1/users/me \
 ### 5. 受保护接口与用户上下文
 
 本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
+
 ```
 Authorization: Bearer <access_token>
 ```
@@ -389,6 +424,7 @@ Authorization: Bearer <access_token>
 ```
 
 其中：
+
 `code`表示业务错误码
 
 `msg`表示成功或错误信息
