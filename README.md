@@ -170,7 +170,7 @@ GET /api/v1/users/me
 Header：
 
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer ${ACCESS_TOKEN}
 ```
 
 响应：
@@ -193,7 +193,7 @@ PUT /api/v1/users/me/profile
 Header：
 
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer ${ACCESS_TOKEN}
 ```
 
 请求
@@ -232,18 +232,18 @@ curl -X POST http://localhost:8082/api/v1/auth/login \
 
 # 3、获取用户信息(备注：获取access_token需要先调用登录接口，再替换下面命令中的值)
 curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer <access_token>"
+  -H "Authorization: Bearer {access_token}"
 
 
 # 4、修改昵称
 curl -X PUT http://localhost:8082/api/v1/users/me/profile \
    -H "Content-Type: application/json" \
-   -H "Authorization: Bearer <access_token>" \
+   -H "Authorization: Bearer {access_token}" \
    -d '{"nickname":"new_name"}'
 
 # 5、再次获取用户信息
 curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer <access_token>"
+  -H "Authorization: Bearer {access_token}"
 
 ```
 
@@ -379,7 +379,7 @@ curl http://localhost:8082/api/v1/users/me \
 本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
 
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer ${ACCESS_TOKEN}
 ```
 
 该中间件的主要流程为：
