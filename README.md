@@ -251,44 +251,109 @@ curl http://localhost:8082/api/v1/users/me \
 ## 11. 最终自测清单
 
 ### 服务与环境
+
 - [x] `.env` 配置正确，项目可正常启动
 - [x] `GET /ping` 返回 Http 200，且响应体 code = 0，响应结构符合统一格式
 
 ### 注册
+
 - [x] 正常注册成功
 - [x] 用户名为空时返回正确错误
 - [x] 用户名过短时返回正确错误
 - [x] 重复注册时返回正确错误
 
 ### 登录
+
 - [x] 正常登录成功，返回 `access_token`
 - [x] 用户不存在时返回正确错误
 - [x] 密码错误时返回正确错误
 - [x] 被禁用用户无法登录
 
 ### JWT 鉴权
+
 - [x] 不带 token 访问 `/api/v1/users/me` 被拦截
 - [x] 错误格式的 Authorization 头被拦截
 - [x] 无效 token 被拦截
 - [x] 正确 token 可访问 `/api/v1/users/me`
 
 ### 用户信息
+
 - [x] `/api/v1/users/me` 返回当前用户信息
 - [x] `PUT /api/v1/users/me/profile` 修改昵称成功
 - [x] 修改昵称后再次查询，返回最新昵称
-
 
 ## 12. 设计与实现要点
 
 ### 1. 分层结构设计
 
+```
+本项目采用 `api/ service/ dao/ model/ middleware/ utils/ config/`的分层结构，将 HTTP 请求处理、业务逻辑、数据访问和通用工具拆开。
+
+这样做的原因是避免所有逻辑都堆积在 handler 中，方便后续的扩展。
+
+`api`层只负责参数绑定和响应返回；
+`service`层负责处理业务逻辑，如注册、登录、用户状态判定和修改昵称等业务规则；
+`dao`层只负责数据库访问；
+`model`层只负责定义实体和通用响应结构；
+`middleware`层是中间件层，用于`router`层挂载中间件;
+`utils`层用于声明各层之间的通用工具;
+`config`是项目的配置入口，用于读取项目配置所需的参数。
+
+这种拆分避免项目各层之间耦合，让代码职责更清晰。
+
+```
+
 ### 2. 路由分组设计
+
+```
+本项目采用 `/api/v1` 作为接口前缀，并将认证接口 `auth` 和用户资源 `users` 进行接口分组：
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/users/me`
+- `PUT /api/v1/users/me/profile`
+
+其中，`/auth` 负责注册和登录，`/users`负责当前用户相关的操作。需要登录的用户接口统一挂载JWT鉴权中间件，
+避免每个 handler 中重复编写 access_token 校验逻辑。
+```
 
 ### 3. 用户注册与密码哈希
 
+```
+在本项目的注册流程中，`service` 层会先校验用户名和密码，再通过 `dao` 层检查用户名是否已经存在。
+密码不会以明文的形式保存在数据库中，而是通过 bcrypt 生成哈希后写入 `password_hash` 字段。
+
+注册流程：
+客户端提交用户名和密码：
+-> api 层绑定 JSON 参数
+-> service 层校验参数
+-> dao 层检查用户名是否已经存在
+-> bcrypt 生成密码哈希
+-> dao 层创建用户记录
+-> mysql 保存数据
+-> api 统一响应
+```
+
 ### 4. 用户登录与 JWT 鉴权
 
+```
+在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户密码是否和数据库中的密码哈希是否相互匹配。
+`api` 层会调用 `middleware` 层生成 JWT ，并返回 access_token ，最后会将部分用户信息和 access_token 进行返回。
+
+登录流程：
+客户端提交用户名和密码：
+-> api 层绑定 JSON 参数
+-> service 层校验参数，依次查询用户名、判断用户状态、bcrypt 校验密码
+-> middleware 层生成 JWT 返回 access_token
+-> api 将部分用户信息和 access_token 返回
+
+```
+
 ### 5. 受保护接口与用户上下文
+
+```
+
+```
 
 ### 6. 统一响应与错误处理
 
