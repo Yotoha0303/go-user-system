@@ -23,7 +23,7 @@ var (
 	ErrUserDisabled     = errors.New("user disabled")
 	ErrNicknameEmpty    = errors.New("nickname is empty")
 	ErrNicknameTooLong  = errors.New("nickname too long")
-	ErrInvalidUserID    = errors.New("userID is not empty")
+	ErrInvalidUserID    = errors.New("invalid user id")
 )
 
 func Register(username, password string) error {
