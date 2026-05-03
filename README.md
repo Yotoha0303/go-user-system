@@ -170,7 +170,7 @@ GET /api/v1/users/me
 Header：
 
 ```
-Authorization: Bearer ${ACCESS_TOKEN}
+Authorization: Bearer {access_token}
 ```
 
 响应：
@@ -193,7 +193,7 @@ PUT /api/v1/users/me/profile
 Header：
 
 ```
-Authorization: Bearer ${ACCESS_TOKEN}
+Authorization: Bearer {access_token}
 ```
 
 请求
@@ -217,6 +217,9 @@ Authorization: Bearer ${ACCESS_TOKEN}
 ## 9. 手动测试流程
 
 ```
+# 0、健康检查
+curl http://localhost:8082/ping
+
 # 1、注册
   示例
 
@@ -232,18 +235,18 @@ curl -X POST http://localhost:8082/api/v1/auth/login \
 
 # 3、获取用户信息(备注：获取access_token需要先调用登录接口，再替换下面命令中的值)
 curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer {access_token}"
+  -H "Authorization: Bearer ${ACCESS_TOKEN}"
 
 
 # 4、修改昵称
 curl -X PUT http://localhost:8082/api/v1/users/me/profile \
    -H "Content-Type: application/json" \
-   -H "Authorization: Bearer {access_token}" \
+   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
    -d '{"nickname":"new_name"}'
 
 # 5、再次获取用户信息
 curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer {access_token}"
+  -H "Authorization: Bearer ${ACCESS_TOKEN}"
 
 ```
 
@@ -355,11 +358,9 @@ curl http://localhost:8082/api/v1/users/me \
 
 ### 4. 用户登录与 JWT 生成
 
-在本项目的用户登录流程中，`service` 层不会直接查询账户和密码是否符合登录需求，
+在用户登录流程中，`service` 层不会直接比对明文密码，而是先根据用户名查询用户记录，
 
-而是会依次查询用户名是否存在、判断用户是否禁用、bcrypt 校验用户
-
-密码是否和数据库中的密码哈希是否相互匹配。
+判断用户是否存在、状态是否正常，再使用 bcrypt 校验用户提交的密码与数据库中的密码哈希是否匹配。
 
 登录成功后，`api` 层会调用 JWT 工具生成并返回 access_token 给客户端。
 
@@ -379,7 +380,7 @@ curl http://localhost:8082/api/v1/users/me \
 本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
 
 ```
-Authorization: Bearer ${ACCESS_TOKEN}
+Authorization: Bearer {access_token}
 ```
 
 该中间件的主要流程为：
@@ -425,14 +426,13 @@ Authorization: Bearer ${ACCESS_TOKEN}
 
 其中：
 
-`code`表示业务错误码
+- `code` 表示业务错误码
 
-`msg`表示成功或错误信息
+- `msg` 表示成功或错误信息
 
-`data`返回具体的业务数据
+- `data` 返回具体的业务数据
 
-HTTP 状态码用于表示请求层结果，业务 code 用于表示具体业务错误类型。
-
+- HTTP 状态码用于表示请求层结果，业务 `code` 用于表示具体业务错误类型
 
 ### 8. 配置与敏感信息管理
 
