@@ -14,11 +14,16 @@ import (
 func main() {
 	config.LoadEnv()
 
-	if err := utils.InitJWTKey(); err != nil {
+	cfg, err := config.Load("config.yml")
+	if err != nil {
+		log.Fatalf("load config failed: %v", err)
+	}
+
+	if err := utils.InitJWTKey(cfg); err != nil {
 		log.Fatalf("init jwt key failed: %v", err)
 	}
 
-	db, err := dao.InitDB()
+	db, err := dao.InitDB(cfg)
 
 	if err != nil {
 		log.Fatalf("failed to connect database")
@@ -28,11 +33,6 @@ func main() {
 		log.Fatalf("auto migrate failed:%v", err)
 	}
 	global.DB = db
-
-	cfg, err := config.Load("config.yml")
-	if err != nil {
-		log.Fatalf("load config failed: %v", err)
-	}
 
 	r := router.SetupRouter()
 

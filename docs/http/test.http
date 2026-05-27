@@ -1,0 +1,41 @@
+@baseUrl = http://127.0.0.1:8082
+@username = "test_name"
+@password = "test123"
+@nickname = "test_nickname"
+
+### 0. 服务器健康检查
+GET {{baseUrl}}/ping
+
+### 1. 用户注册
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": {{username}},
+  "password": {{password}}
+}
+
+### 2. 用户登录
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": {{username}},
+  "password": {{password}}
+}
+
+### 3. 访问受保护的接口
+GET {{baseUrl}}/api/v1/users/me
+Authorization: Bearer <access_token>
+
+## 示例
+"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6InRlc3RfbmFtZSIsImlzcyI6ImdvLXVzZXItc3lzdGVtIiwiZXhwIjoxNzc5OTc2NjA0LCJpYXQiOjE3Nzk4OTAyMDR9.-8DgVi10pu9SzsXzgfCICIsxJKQVtNyxC1r5fH_Ovfs"
+
+### 4. 更改用户昵称
+PUT {{baseUrl}}/api/v1/users/me/profile
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "nickname": {{nickname}}
+}

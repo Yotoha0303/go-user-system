@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"go-user-system/config"
 	"os"
 	"strconv"
 	"time"
@@ -9,14 +10,26 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtkey []byte
+var (
+	jwtkey      []byte
+	expireHours int
+)
 
-func InitJWTKey() error {
+const expireHoursInit int = 24
+
+func InitJWTKey(cfg *config.Config) error {
 
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {
 		return errors.New("JWT_SECRET is not set")
 	}
+
+	if cfg.JWT.ExpireHours == 0 {
+		cfg.JWT.ExpireHours = expireHoursInit
+	}
+
+	expireHours = cfg.JWT.ExpireHours
+
 	jwtkey = []byte(key)
 	return nil
 }

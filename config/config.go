@@ -9,10 +9,23 @@ import (
 
 type Config struct {
 	Server ServerConfig `yaml:"server"`
+	MySQL  MySQLConfig  `yaml:"mysql"`
+	JWT    JWTConfig    `yaml:"jwt"`
 }
 
 type ServerConfig struct {
 	Port int `yaml:"port"`
+}
+
+type MySQLConfig struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	User     string `yaml:"user"`
+	DataBase string `yaml:"database"`
+}
+
+type JWTConfig struct {
+	ExpireHours int `yaml:"expireHours"`
 }
 
 func LoadEnv() {
