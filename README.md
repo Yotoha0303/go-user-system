@@ -60,6 +60,9 @@ utils/      工具函数，如统一响应、JWT 工具
 config/     YAML 配置加载
 global/     全局资源，如 DB
 middleware/ 路由中间件
+request/    请求参数结构
+response/   响应结构
+docs/       存放测试(.http)和sql文件的文件夹
 ```
 
 ## 5. SQL 结构
@@ -82,15 +85,26 @@ CREATE TABLE `users`  (
 
 ## 6. 环境变量
 
+项目通过 `.env` 读取数据库配置：
+
 ```.env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
 DB_PASSWORD=your_password
-DB_NAME=go_user_system
 
 JWT_SECRET=replace_with_a_long_random_secret
-JWT_EXPIRE_HOURS=24
+```
+
+服务端口配置在 `config.yml`：
+
+```yaml
+server:
+  port: 8082
+mysql:
+  host: 127.0.0.1
+  port: "3306"
+  user: root
+  database: go_user_system
+jwt:
+  expireHours: 24
 ```
 
 ## 7. 启动方式
@@ -250,6 +264,10 @@ curl http://localhost:8082/api/v1/users/me \
 
 ```
 
+本项目提高手动测试的文件 .http ，需要安装插件 VScode REST Client
+
+文件位置：[test.http](./docs/http/test.http)
+
 ## 10. 最终自测清单
 
 ### 服务与环境
@@ -310,13 +328,17 @@ curl http://localhost:8082/api/v1/users/me \
 
 - `dao` 层只负责数据库访问，不处理密码校验和用户状态判断
 
-- `model` 层定义用户实体、状态常量和通用响应结构
+- `model` 层定义用户实体
 
 - `middleware` 层负责 JWT 鉴权等横切逻辑
 
-- `utils` 层封装统一响应、JWT 等通用工具函数
+- `utils` 层封装 JWT 通用工具函数
 
 - `config` 层负责读取配置和加载环境变量
+
+- `request` 层定义请求参数结构体
+
+- `response` 层定义响应数据结构体
 
 这种拆分避免项目各层之间耦合，让代码职责更清晰。
 
@@ -441,12 +463,7 @@ Authorization: Bearer {access_token}
 其中，本项目提供 `.env.example` 作为配置模板：
 
 ```.env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
 DB_PASSWORD=your_password
-DB_NAME=go_user_system
 
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
-JWT_EXPIRE_HOURS=24
 ```

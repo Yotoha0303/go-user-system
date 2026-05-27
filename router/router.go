@@ -3,7 +3,7 @@ package router
 import (
 	"go-user-system/api"
 	"go-user-system/middleware"
-	"go-user-system/utils"
+	"go-user-system/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +19,7 @@ func SetupRouter() *gin.Engine {
 
 func registerHealthRoutes(r *gin.Engine) {
 	r.GET("/ping", func(c *gin.Context) {
-		utils.Success(c, gin.H{
+		response.Success(c, gin.H{
 			"message": "success",
 		})
 	})

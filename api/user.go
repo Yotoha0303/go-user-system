@@ -2,30 +2,19 @@ package api
 
 import (
 	"errors"
+	"go-user-system/request"
+	"go-user-system/response"
 	"go-user-system/service"
 	"go-user-system/utils"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-type RegisterRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type UpdateProfileRequest struct {
-	Nickname string `json:"nickname"`
-}
-
 func RegisterHandler(c *gin.Context) {
-	var req RegisterRequest
+	var req request.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Fail(c, 400, 1001, "参数错误")
+		response.Fail(c, http.StatusBadRequest, 1001, "参数错误")
 		return
 	}
 
@@ -35,22 +24,22 @@ func RegisterHandler(c *gin.Context) {
 			errors.Is(err, service.ErrPasswordEmpty),
 			errors.Is(err, service.ErrUsernameTooShort),
 			errors.Is(err, service.ErrPasswordTooShort):
-			utils.Fail(c, 400, 1001, err.Error())
+			response.Fail(c, http.StatusBadRequest, 1001, err.Error())
 		case errors.Is(err, service.ErrUsernameExists):
-			utils.Fail(c, 400, 1002, err.Error())
+			response.Fail(c, http.StatusConflict, 1002, err.Error())
 		default:
-			utils.Fail(c, 500, 1003, "register failed")
+			response.Fail(c, http.StatusInternalServerError, 1003, "注册失败")
 		}
 		return
 	}
 
-	utils.Success(c, nil)
+	response.Success(c, nil)
 }
 
 func LoginHandler(c *gin.Context) {
-	var req LoginRequest
+	var req request.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Fail(c, 400, 1001, "参数错误")
+		response.Fail(c, http.StatusBadRequest, 1001, "参数错误")
 		return
 	}
 
@@ -60,31 +49,31 @@ func LoginHandler(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrUsernameEmpty),
 			errors.Is(err, service.ErrPasswordEmpty):
-			utils.Fail(c, 400, 1001, err.Error())
+			response.Fail(c, http.StatusBadRequest, 1001, err.Error())
 		case errors.Is(err, service.ErrUserNotFound),
 			errors.Is(err, service.ErrPasswordWrong):
-			utils.Fail(c, 400, 1004, err.Error())
+			response.Fail(c, http.StatusNotFound, 1004, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			utils.Fail(c, 403, 1005, err.Error())
+			response.Fail(c, http.StatusConflict, 1005, err.Error())
 		default:
-			utils.Fail(c, 500, 1006, "login failed")
+			response.Fail(c, http.StatusInternalServerError, 1006, "登录错误")
 		}
 		return
 	}
 
 	token, err := utils.GenerateToken(user.ID, user.Username)
 	if err != nil {
-		utils.Fail(c, 500, 2005, "generate token failed")
+		response.Fail(c, http.StatusInternalServerError, 2005, "生成 access_token 失败")
 		return
 	}
 
-	utils.Success(c, gin.H{
+	response.Success(c, gin.H{
 		"access_token": token,
-		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"nickname": user.Nickname,
-			"status":   user.Status,
+		"user": response.UserInfoResponse{
+			ID:       user.ID,
+			UserName: user.Username,
+			NickName: user.Nickname,
+			Status:   user.Status,
 		},
 	})
 }
@@ -92,13 +81,13 @@ func LoginHandler(c *gin.Context) {
 func MeHandler(c *gin.Context) {
 	v, exists := c.Get("user_id")
 	if !exists {
-		utils.Fail(c, 401, 3004, "user context missing")
+		response.Fail(c, http.StatusInternalServerError, 3004, "没有找到用户信息")
 		return
 	}
 
 	userID, ok := v.(int64)
 	if !ok {
-		utils.Fail(c, 500, 3005, "invalid user context")
+		response.Fail(c, http.StatusInternalServerError, 3005, "无效的用户信息")
 		return
 	}
 
@@ -106,39 +95,39 @@ func MeHandler(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrUserNotFound):
-			utils.Fail(c, 404, 3006, err.Error())
+			response.Fail(c, http.StatusNotFound, 3006, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			utils.Fail(c, 403, 3007, err.Error())
+			response.Fail(c, http.StatusConflict, 3007, err.Error())
 		default:
-			utils.Fail(c, 500, 3008, "get user profile failed")
+			response.Fail(c, http.StatusInternalServerError, 3008, "获取用户信息失败")
 		}
 		return
 	}
 
-	utils.Success(c, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"nickname": user.Nickname,
-		"status":   user.Status,
+	response.Success(c, response.UserInfoResponse{
+		ID:       user.ID,
+		UserName: user.Username,
+		NickName: user.Nickname,
+		Status:   user.Status,
 	})
 }
 
 func UpdateProfileHandler(c *gin.Context) {
 	value, exists := c.Get("user_id")
 	if !exists {
-		utils.Fail(c, 401, 5001, "user_id not found in context")
+		response.Fail(c, http.StatusInternalServerError, 5001, "没有找到用户信息")
 		return
 	}
 
 	userID, ok := value.(int64)
 	if !ok {
-		utils.Fail(c, 500, 5002, "invalid user_id type")
+		response.Fail(c, http.StatusInternalServerError, 5002, "无效的用户信息")
 		return
 	}
 
-	var req UpdateProfileRequest
+	var req request.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Fail(c, 400, 5003, "参数错误")
+		response.Fail(c, http.StatusBadRequest, 5003, "参数错误")
 		return
 	}
 
@@ -146,15 +135,15 @@ func UpdateProfileHandler(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrNicknameEmpty),
 			errors.Is(err, service.ErrNicknameTooLong):
-			utils.Fail(c, 400, 5004, err.Error())
+			response.Fail(c, http.StatusBadRequest, 5004, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			utils.Fail(c, 403, 5005, err.Error())
+			response.Fail(c, http.StatusConflict, 5005, err.Error())
 		case errors.Is(err, service.ErrUserNotFound):
-			utils.Fail(c, 404, 5006, err.Error())
+			response.Fail(c, http.StatusNotFound, 5006, err.Error())
 		default:
-			utils.Fail(c, 500, 5007, "update profile failed")
+			response.Fail(c, http.StatusInternalServerError, 5007, "更改昵称失败")
 		}
 		return
 	}
-	utils.Success(c, nil)
+	response.Success(c, nil)
 }
