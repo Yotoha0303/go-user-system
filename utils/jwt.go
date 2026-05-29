@@ -15,7 +15,6 @@ var (
 	expireHours int
 )
 
-const expireHoursInit int = 24
 
 func InitJWTKey(cfg *config.Config) error {
 
@@ -25,8 +24,8 @@ func InitJWTKey(cfg *config.Config) error {
 	}
 
 	if cfg.JWT.ExpireHours == 0 {
-		cfg.JWT.ExpireHours = expireHoursInit
-	}
+		return errors.New("JWT_EXPIRE_HOURS is not set")
+	} 
 
 	expireHours = cfg.JWT.ExpireHours
 
