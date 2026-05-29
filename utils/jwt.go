@@ -4,7 +4,6 @@ import (
 	"errors"
 	"go-user-system/config"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,7 +14,6 @@ var (
 	expireHours int
 )
 
-
 func InitJWTKey(cfg *config.Config) error {
 
 	key := os.Getenv("JWT_SECRET")
@@ -25,7 +23,7 @@ func InitJWTKey(cfg *config.Config) error {
 
 	if cfg.JWT.ExpireHours == 0 {
 		return errors.New("JWT_EXPIRE_HOURS is not set")
-	} 
+	}
 
 	expireHours = cfg.JWT.ExpireHours
 
@@ -40,11 +38,6 @@ type UserClaims struct {
 }
 
 func GenerateToken(userID int64, username string) (string, error) {
-	expireHoursStr := os.Getenv("JWT_EXPIRE_HOURS")
-	expireHours, err := strconv.Atoi(expireHoursStr)
-	if err != nil || expireHours <= 0 {
-		expireHours = 24
-	}
 
 	claims := UserClaims{
 		UserID:   userID,
