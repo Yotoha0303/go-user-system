@@ -52,17 +52,18 @@
 
 ```text
 api/        HTTP 接口层，负责参数绑定和响应返回
-service/    业务逻辑层，负责注册、登录、鉴权相关业务规则
-dao/        数据访问层，负责数据库操作
-model/      数据模型层，定义 User、Response 等结构
-router/     路由注册、接口归类、版本管理、中间件挂载
-utils/      工具函数，如统一响应、JWT 工具
-config/     YAML 配置加载
-global/     全局资源，如 DB
-middleware/ 路由中间件
+service/    业务逻辑层，负责注册、登录、用户状态判断、昵称修改等业务规则
+dao/        数据访问层，负责用户表的增删查改
+database/   数据库初始化，负责 MySQL 连接创建
+model/      数据模型层，定义 User 实体和状态常量
 request/    请求参数结构
-response/   响应结构
-docs/       存放测试(.http)和sql文件的文件夹
+response/   统一响应结构和响应方法
+router/     路由注册、接口分组、中间件挂载
+middleware/ JWT 鉴权中间件
+utils/      通用工具，目前主要为 JWT 工具
+config/     配置加载，读取 config.yml 和 .env
+global/     全局资源，目前保存 DB 实例
+docs/       测试用例和 SQL 文件
 ```
 
 ## 5. SQL 结构

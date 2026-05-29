@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"go-user-system/config"
-	"go-user-system/dao"
+	"go-user-system/database"
 	"go-user-system/global"
 	"go-user-system/model"
 	"go-user-system/router"
@@ -23,7 +23,7 @@ func main() {
 		log.Fatalf("init jwt key failed: %v", err)
 	}
 
-	db, err := dao.InitDB(cfg)
+	db, err := database.InitDB(cfg)
 
 	if err != nil {
 		log.Fatalf("failed to connect database")
