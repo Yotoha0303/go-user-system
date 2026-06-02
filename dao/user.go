@@ -12,22 +12,14 @@ func CreateUser(db *gorm.DB, user *model.User) error {
 
 func GetUserByUsername(db *gorm.DB, username string) (*model.User, error) {
 	var user model.User
-	err := db.Where("username =?", username).First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return &user, db.Where("username =?", username).First(&user).Error
 }
 
 func GetUserByID(db *gorm.DB, id int64) (*model.User, error) {
 	var user model.User
-	if err := db.Where("id = ?", id).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return &user, db.Where("id = ?", id).First(&user).Error
 }
 
 func UpdateNicknameByID(db *gorm.DB, id int64, nickname string) error {
-
-	return db.Model(&model.User{}).Where("id = ?", id).Update("nickname", nickname).Error
+	return db.Where("id = ?", id).Model(&model.User{}).Update("nickname", nickname).Error
 }

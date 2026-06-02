@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -28,6 +29,11 @@ type JWTConfig struct {
 	ExpireHours int `yaml:"expireHours"`
 }
 
+var (
+	ErrReadConfigFileFailed          = errors.New("read file failed")
+	ErrUnmarshalConfigFileDataFailed = errors.New("unmarshal config file data failed")
+)
+
 func LoadEnv() {
 	_ = godotenv.Load()
 }
@@ -35,13 +41,13 @@ func LoadEnv() {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, ErrReadConfigFileFailed
 	}
 
 	var cfg Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnmarshalConfigFileDataFailed
 	}
 
 	return &cfg, nil

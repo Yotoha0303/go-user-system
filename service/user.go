@@ -7,50 +7,34 @@ import (
 	"go-user-system/dao"
 	"go-user-system/global"
 	"go-user-system/model"
+	"go-user-system/request"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrUsernameEmpty    = errors.New("username is empty")
-	ErrPasswordEmpty    = errors.New("password is empty")
-	ErrUsernameTooShort = errors.New("username too short")
-	ErrPasswordTooShort = errors.New("password too short")
-	ErrUsernameExists   = errors.New("username already exists")
-	ErrUserNotFound     = errors.New("username not found")
-	ErrPasswordWrong    = errors.New("password incorrect")
-	ErrUserDisabled     = errors.New("user disabled")
-	ErrNicknameEmpty    = errors.New("nickname is empty")
-	ErrNicknameTooLong  = errors.New("nickname too long")
-	ErrInvalidUserID    = errors.New("invalid user id")
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+	ErrUserNotFound          = errors.New("username not found")
+	ErrUserDisabled          = errors.New("user disabled")
+	ErrPasswordWrong         = errors.New("password incorrect")
+	ErrInvalidUserID         = errors.New("invalid user id")
+	ErrNicknameTooLong       = errors.New("nickname too long")
 )
 
-func Register(username, password string) error {
+func Register(req request.RegisterRequest) error {
 
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return ErrUsernameEmpty
-	}
-	if password == "" {
-		return ErrPasswordEmpty
-	}
-	if len(username) < 3 {
-		return ErrUsernameTooShort
-	}
-	if len(password) < 6 {
-		return ErrPasswordTooShort
-	}
+	username := strings.TrimSpace(req.Username)
 
-	existUser, err := dao.GetUserByUsername(global.DB, username)
-	if err == nil && existUser != nil {
-		return ErrUsernameExists
+	userInfo, err := dao.GetUserByUsername(global.DB, username)
+	if err == nil && userInfo != nil {
+		return ErrUsernameAlreadyExists
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 
-	hashBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -63,20 +47,12 @@ func Register(username, password string) error {
 	return dao.CreateUser(global.DB, &user)
 }
 
-func Login(username, password string) (*model.User, error) {
-	username = strings.TrimSpace(username)
-
-	if username == "" {
-		return nil, ErrUsernameEmpty
-	}
-	if password == "" {
-		return nil, ErrPasswordEmpty
-	}
+func Login(req request.LoginRequest) (*model.User, error) {
+	username := strings.TrimSpace(req.Username)
 
 	user, err := dao.GetUserByUsername(global.DB, username)
 
 	if err != nil {
-
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
 		}
@@ -87,7 +63,7 @@ func Login(username, password string) (*model.User, error) {
 		return nil, ErrUserDisabled
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, ErrPasswordWrong
 	}
 
@@ -116,9 +92,7 @@ func GetProfile(userID int64) (*model.User, error) {
 
 func UpdateNickname(userID int64, nickname string) error {
 	nickname = strings.TrimSpace(nickname)
-	if nickname == "" {
-		return ErrNicknameEmpty
-	}
+
 	if len(nickname) > 64 {
 		return ErrNicknameTooLong
 	}

@@ -16,17 +16,17 @@ func main() {
 
 	cfg, err := config.Load("config.yml")
 	if err != nil {
-		log.Fatalf("load config failed: %v", err)
+		log.Fatalf("load config failed: %v", err.Error())
 	}
 
 	if err := utils.InitJWTKey(cfg); err != nil {
-		log.Fatalf("init jwt key failed: %v", err)
+		log.Fatalf("init jwt key failed: %v", err.Error())
 	}
 
 	db, err := database.InitDB(cfg)
 
 	if err != nil {
-		log.Fatalf("failed to connect database")
+		log.Fatalf("failed to connect database: %v", err)
 	}
 
 	if err := db.AutoMigrate(&model.User{}); err != nil {

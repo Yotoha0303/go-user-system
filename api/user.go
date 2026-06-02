@@ -11,24 +11,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var (
+	CodeParameterFailed       = 1001
+	CodeUsernameAlreadyExists = 1002
+	CodeRegisterFailed        = 1003
+	CodeUserNotFound          = 1004
+	CodeUserDisabled          = 1005
+	CodeLoginFailed           = 1006
+
+	CodeGenerateTokenFailed           = 2001
+	CodeUserNotFoundInTheAccessToken  = 2002
+	CodeInvalidUserInTheAccessToken   = 2003
+	CodeGetUserFailedInTheAccessToken = 2004
+
+	CodeNickNameTooLong      = 3001
+	CodeUpdateNickNameFailed = 3002
+)
+
 func RegisterHandler(c *gin.Context) {
 	var req request.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, 1001, "参数错误")
+		response.Fail(c, http.StatusBadRequest, CodeParameterFailed, "参数错误")
 		return
 	}
 
-	if err := service.Register(req.Username, req.Password); err != nil {
+	if err := service.Register(req); err != nil {
 		switch {
-		case errors.Is(err, service.ErrUsernameEmpty),
-			errors.Is(err, service.ErrPasswordEmpty),
-			errors.Is(err, service.ErrUsernameTooShort),
-			errors.Is(err, service.ErrPasswordTooShort):
-			response.Fail(c, http.StatusBadRequest, 1001, err.Error())
-		case errors.Is(err, service.ErrUsernameExists):
-			response.Fail(c, http.StatusConflict, 1002, err.Error())
+		case errors.Is(err, service.ErrUsernameAlreadyExists):
+			response.Fail(c, http.StatusConflict, CodeUsernameAlreadyExists, err.Error())
 		default:
-			response.Fail(c, http.StatusInternalServerError, 1003, "注册失败")
+			response.Fail(c, http.StatusInternalServerError, CodeRegisterFailed, "注册失败")
 		}
 		return
 	}
@@ -39,31 +51,28 @@ func RegisterHandler(c *gin.Context) {
 func LoginHandler(c *gin.Context) {
 	var req request.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, 1001, "参数错误")
+		response.Fail(c, http.StatusBadRequest, CodeParameterFailed, "参数错误")
 		return
 	}
 
-	user, err := service.Login(req.Username, req.Password)
+	user, err := service.Login(req)
 	if err != nil {
 
 		switch {
-		case errors.Is(err, service.ErrUsernameEmpty),
-			errors.Is(err, service.ErrPasswordEmpty):
-			response.Fail(c, http.StatusBadRequest, 1001, err.Error())
 		case errors.Is(err, service.ErrUserNotFound),
 			errors.Is(err, service.ErrPasswordWrong):
-			response.Fail(c, http.StatusNotFound, 1004, err.Error())
+			response.Fail(c, http.StatusNotFound, CodeUserNotFound, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			response.Fail(c, http.StatusConflict, 1005, err.Error())
+			response.Fail(c, http.StatusConflict, CodeUserDisabled, err.Error())
 		default:
-			response.Fail(c, http.StatusInternalServerError, 1006, "登录错误")
+			response.Fail(c, http.StatusInternalServerError, CodeLoginFailed, "登录错误")
 		}
 		return
 	}
 
 	token, err := utils.GenerateToken(user.ID, user.Username)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, 2005, "生成 access_token 失败")
+		response.Fail(c, http.StatusInternalServerError, CodeGenerateTokenFailed, "生成 access_token 失败")
 		return
 	}
 
@@ -81,13 +90,13 @@ func LoginHandler(c *gin.Context) {
 func MeHandler(c *gin.Context) {
 	v, exists := c.Get("user_id")
 	if !exists {
-		response.Fail(c, http.StatusInternalServerError, 3004, "没有找到用户信息")
+		response.Fail(c, http.StatusInternalServerError, CodeUserNotFoundInTheAccessToken, "没有找到用户信息")
 		return
 	}
 
 	userID, ok := v.(int64)
 	if !ok {
-		response.Fail(c, http.StatusInternalServerError, 3005, "无效的用户信息")
+		response.Fail(c, http.StatusInternalServerError, CodeInvalidUserInTheAccessToken, "无效的用户信息")
 		return
 	}
 
@@ -95,11 +104,11 @@ func MeHandler(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrUserNotFound):
-			response.Fail(c, http.StatusNotFound, 3006, err.Error())
+			response.Fail(c, http.StatusNotFound, CodeUserNotFound, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			response.Fail(c, http.StatusConflict, 3007, err.Error())
+			response.Fail(c, http.StatusConflict, CodeUserDisabled, err.Error())
 		default:
-			response.Fail(c, http.StatusInternalServerError, 3008, "获取用户信息失败")
+			response.Fail(c, http.StatusInternalServerError, CodeGetUserFailedInTheAccessToken, "获取用户信息失败")
 		}
 		return
 	}
@@ -115,33 +124,32 @@ func MeHandler(c *gin.Context) {
 func UpdateProfileHandler(c *gin.Context) {
 	value, exists := c.Get("user_id")
 	if !exists {
-		response.Fail(c, http.StatusInternalServerError, 5001, "没有找到用户信息")
+		response.Fail(c, http.StatusInternalServerError, CodeUserNotFoundInTheAccessToken, "没有找到用户信息")
 		return
 	}
 
 	userID, ok := value.(int64)
 	if !ok {
-		response.Fail(c, http.StatusInternalServerError, 5002, "无效的用户信息")
+		response.Fail(c, http.StatusInternalServerError, CodeInvalidUserInTheAccessToken, "无效的用户信息")
 		return
 	}
 
 	var req request.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, http.StatusBadRequest, 5003, "参数错误")
+		response.Fail(c, http.StatusBadRequest, CodeParameterFailed, "参数错误")
 		return
 	}
 
 	if err := service.UpdateNickname(userID, req.Nickname); err != nil {
 		switch {
-		case errors.Is(err, service.ErrNicknameEmpty),
-			errors.Is(err, service.ErrNicknameTooLong):
-			response.Fail(c, http.StatusBadRequest, 5004, err.Error())
+		case errors.Is(err, service.ErrNicknameTooLong):
+			response.Fail(c, http.StatusBadRequest, CodeNickNameTooLong, err.Error())
 		case errors.Is(err, service.ErrUserDisabled):
-			response.Fail(c, http.StatusConflict, 5005, err.Error())
+			response.Fail(c, http.StatusConflict, CodeUserDisabled, err.Error())
 		case errors.Is(err, service.ErrUserNotFound):
-			response.Fail(c, http.StatusNotFound, 5006, err.Error())
+			response.Fail(c, http.StatusNotFound, CodeUserNotFound, err.Error())
 		default:
-			response.Fail(c, http.StatusInternalServerError, 5007, "更改昵称失败")
+			response.Fail(c, http.StatusInternalServerError, CodeUpdateNickNameFailed, "更改昵称失败")
 		}
 		return
 	}

@@ -14,15 +14,23 @@ var (
 	expireHours int
 )
 
+var (
+	ErrJWTSecretNotFound    = errors.New("JWT_SECRET is not set")
+	ErrJWTExpireHoursNotSet = errors.New("JWT_EXPIRE_HOURS is not set")
+	ErrAccessTokenInvalid   = errors.New("invalid access token")
+)
+
+const InitIssuer = "go-user-system"
+
 func InitJWTKey(cfg *config.Config) error {
 
 	key := os.Getenv("JWT_SECRET")
 	if key == "" {
-		return errors.New("JWT_SECRET is not set")
+		return ErrJWTSecretNotFound
 	}
 
 	if cfg.JWT.ExpireHours == 0 {
-		return errors.New("JWT_EXPIRE_HOURS is not set")
+		return ErrJWTExpireHoursNotSet
 	}
 
 	expireHours = cfg.JWT.ExpireHours
@@ -45,7 +53,7 @@ func GenerateToken(userID int64, username string) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expireHours) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "go-user-system",
+			Issuer:    InitIssuer,
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -68,7 +76,7 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 
 	claims, ok := token.Claims.(*UserClaims)
 	if !ok || !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, ErrAccessTokenInvalid
 	}
 
 	return claims, nil
