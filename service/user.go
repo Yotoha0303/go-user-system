@@ -21,11 +21,21 @@ var (
 	ErrInvalidUserID         = errors.New("invalid user id")
 	ErrNicknameTooLong       = errors.New("nickname too long")
 	ErrNicknameEmpty         = errors.New("nickname is empty")
+	ErrUsernameTooShort      = errors.New("username too short")
+	ErrPasswordTooShort      = errors.New("password too short")
 )
 
 func Register(req request.RegisterRequest) error {
 
 	username := strings.TrimSpace(req.Username)
+
+	if len(username) < 3 {
+		return ErrUsernameTooShort
+	}
+
+	if len(req.Password) < 6 {
+		return ErrPasswordTooShort
+	}
 
 	userInfo, err := dao.GetUserByUsername(global.DB, username)
 	if err == nil && userInfo != nil {

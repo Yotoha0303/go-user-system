@@ -6,3 +6,8 @@ type UserInfoResponse struct {
 	Nickname string `json:"nickname"`
 	Status   int8   `json:"status"`
 }
+
+type TokenAndUserInfoResponse struct {
+	AccessToken string           `json:"access_token"`
+	User        UserInfoResponse `json:"user"`
+}

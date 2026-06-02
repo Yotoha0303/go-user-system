@@ -37,6 +37,9 @@ func RegisterHandler(c *gin.Context) {
 
 	if err := service.Register(req); err != nil {
 		switch {
+		case errors.Is(err, service.ErrUsernameTooShort),
+			errors.Is(err, service.ErrPasswordTooShort):
+			response.Fail(c, http.StatusBadRequest, CodeInvalidParams, err.Error())
 		case errors.Is(err, service.ErrUsernameAlreadyExists):
 			response.Fail(c, http.StatusConflict, CodeUsernameAlreadyExists, err.Error())
 		default:
@@ -76,9 +79,9 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"access_token": token,
-		"user": response.UserInfoResponse{
+	response.Success(c, response.TokenAndUserInfoResponse{
+		AccessToken: token,
+		User: response.UserInfoResponse{
 			ID:       user.ID,
 			Username: user.Username,
 			Nickname: user.Nickname,
