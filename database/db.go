@@ -13,7 +13,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 
 	dbPassword := os.Getenv("DB_PASSWORD")
 
-	if cfg.MySQL.User == "" || dbPassword == "" || cfg.MySQL.Host == "" || cfg.MySQL.Port == "" || cfg.MySQL.DataBase == "" {
+	if cfg.MySQL.User == "" || dbPassword == "" || cfg.MySQL.Host == "" || cfg.MySQL.Port == "" || cfg.MySQL.Database == "" {
 		return nil, fmt.Errorf("database config missing")
 	}
 
@@ -22,7 +22,7 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 		dbPassword,
 		cfg.MySQL.Host,
 		cfg.MySQL.Port,
-		cfg.MySQL.DataBase,
+		cfg.MySQL.Database,
 	)
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
 }

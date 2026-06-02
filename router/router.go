@@ -12,7 +12,7 @@ func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
 	registerHealthRoutes(r)
-	registerAPIRouter(r)
+	registerAPIRoutes(r)
 
 	return r
 }
@@ -25,14 +25,14 @@ func registerHealthRoutes(r *gin.Engine) {
 	})
 }
 
-func registerAPIRouter(rg *gin.Engine) {
+func registerAPIRoutes(rg *gin.Engine) {
 	apiV1 := rg.Group("/api/v1")
 
-	registerAuthRouter(apiV1)
-	registerUsersRouter(apiV1)
+	registerAuthRoutes(apiV1)
+	registerUsersRoutes(apiV1)
 }
 
-func registerAuthRouter(rg *gin.RouterGroup) {
+func registerAuthRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
 		auth.POST("/register", api.RegisterHandler)
@@ -41,7 +41,7 @@ func registerAuthRouter(rg *gin.RouterGroup) {
 	}
 }
 
-func registerUsersRouter(rg *gin.RouterGroup) {
+func registerUsersRoutes(rg *gin.RouterGroup) {
 	users := rg.Group("/users")
 	users.Use(middleware.AuthMiddleware())
 	{

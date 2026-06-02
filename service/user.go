@@ -20,6 +20,7 @@ var (
 	ErrPasswordWrong         = errors.New("password incorrect")
 	ErrInvalidUserID         = errors.New("invalid user id")
 	ErrNicknameTooLong       = errors.New("nickname too long")
+	ErrNicknameEmpty         = errors.New("nickname is empty")
 )
 
 func Register(req request.RegisterRequest) error {
@@ -92,6 +93,10 @@ func GetProfile(userID int64) (*model.User, error) {
 
 func UpdateNickname(userID int64, nickname string) error {
 	nickname = strings.TrimSpace(nickname)
+
+	if nickname == "" {
+		return ErrNicknameEmpty
+	}
 
 	if len(nickname) > 64 {
 		return ErrNicknameTooLong

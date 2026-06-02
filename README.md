@@ -370,8 +370,8 @@ curl http://localhost:8082/api/v1/users/me \
 
 ```text
 客户端提交用户名和密码：
--> api 层绑定 JSON 参数
--> service 层校验参数
+-> api 层通过 request binding 完成基础参数校验
+-> service 层负责用户名查重、密码哈希、用户状态判断等业务逻辑
 -> dao 层检查用户名是否已经存在
 -> bcrypt 生成密码哈希
 -> dao 层创建用户记录

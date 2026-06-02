@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -22,7 +23,7 @@ type MySQLConfig struct {
 	Host     string `yaml:"host"`
 	Port     string `yaml:"port"`
 	User     string `yaml:"user"`
-	DataBase string `yaml:"database"`
+	Database string `yaml:"database"`
 }
 
 type JWTConfig struct {
@@ -41,13 +42,13 @@ func LoadEnv() {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, ErrReadConfigFileFailed
+		return nil, fmt.Errorf("%w: %v", ErrReadConfigFileFailed, err)
 	}
 
 	var cfg Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, ErrUnmarshalConfigFileDataFailed
+		return nil, fmt.Errorf("%w: %v", ErrUnmarshalConfigFileDataFailed, err)
 	}
 
 	return &cfg, nil

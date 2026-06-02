@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	jwtkey      []byte
+	jwtKey      []byte
 	expireHours int
 )
 
@@ -35,7 +35,7 @@ func InitJWTKey(cfg *config.Config) error {
 
 	expireHours = cfg.JWT.ExpireHours
 
-	jwtkey = []byte(key)
+	jwtKey = []byte(key)
 	return nil
 }
 
@@ -57,7 +57,7 @@ func GenerateToken(userID int64, username string) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtkey)
+	return token.SignedString(jwtKey)
 }
 
 func ParseToken(tokenString string) (*UserClaims, error) {
@@ -65,7 +65,7 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 		tokenString,
 		&UserClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return jwtkey, nil
+			return jwtKey, nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 	)
