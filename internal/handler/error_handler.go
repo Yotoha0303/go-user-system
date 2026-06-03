@@ -11,6 +11,15 @@ import (
 
 func handleError(c *gin.Context, err error, fallbackCode int, fallbackMessage string) {
 	if appErr, ok := apperror.FromError(err); ok {
+		if appErr.Cause != nil {
+			log.Printf("app error: path=%s method=%s code=%d msg=%s cause=%v",
+				c.Request.URL.Path,
+				c.Request.Method,
+				appErr.Code,
+				appErr.Message,
+				appErr.Cause,
+			)
+		}
 		response.Fail(c, appErr.HTTPStatus, appErr.Code, appErr.Message)
 		return
 	}
