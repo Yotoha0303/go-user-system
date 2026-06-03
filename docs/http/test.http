@@ -1,6 +1,6 @@
 @baseUrl = http://127.0.0.1:8082
 @username = "test_name"
-@password = "test123"
+@password = "test1234"
 @nickname = "test_nickname"
 
 ### 0. 服务器健康检查

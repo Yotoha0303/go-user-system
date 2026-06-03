@@ -1,9 +1,9 @@
 package router
 
 import (
-	"go-user-system/api"
-	"go-user-system/middleware"
-	"go-user-system/response"
+	"go-user-system/internal/handler"
+	"go-user-system/internal/middleware"
+	"go-user-system/internal/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,8 +35,8 @@ func registerAPIRoutes(rg *gin.Engine) {
 func registerAuthRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
-		auth.POST("/register", api.RegisterHandler)
-		auth.POST("/login", api.LoginHandler)
+		auth.POST("/register", handler.RegisterHandler)
+		auth.POST("/login", handler.LoginHandler)
 
 	}
 }
@@ -45,7 +45,7 @@ func registerUsersRoutes(rg *gin.RouterGroup) {
 	users := rg.Group("/users")
 	users.Use(middleware.AuthMiddleware())
 	{
-		users.GET("/me", api.MeHandler)
-		users.PUT("/me/profile", api.UpdateProfileHandler)
+		users.GET("/me", handler.MeHandler)
+		users.PUT("/me/profile", handler.UpdateProfileHandler)
 	}
 }

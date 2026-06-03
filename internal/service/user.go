@@ -2,27 +2,18 @@ package service
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 
-	"go-user-system/dao"
 	"go-user-system/global"
-	"go-user-system/model"
-	"go-user-system/request"
+	"go-user-system/internal/apperror"
+	"go-user-system/internal/dao"
+	"go-user-system/internal/model"
+	"go-user-system/internal/request"
+	"go-user-system/internal/response"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-)
-
-var (
-	ErrUsernameAlreadyExists = errors.New("username already exists")
-	ErrUserNotFound          = errors.New("username not found")
-	ErrUserDisabled          = errors.New("user disabled")
-	ErrPasswordWrong         = errors.New("password incorrect")
-	ErrInvalidUserID         = errors.New("invalid user id")
-	ErrNicknameTooLong       = errors.New("nickname too long")
-	ErrNicknameEmpty         = errors.New("nickname is empty")
-	ErrUsernameTooShort      = errors.New("username too short")
-	ErrPasswordTooShort      = errors.New("password too short")
 )
 
 func Register(req request.RegisterRequest) error {
@@ -42,12 +33,22 @@ func Register(req request.RegisterRequest) error {
 		return ErrUsernameAlreadyExists
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
+		return apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeRegisterFailed,
+			"注册失败",
+			err,
+		)
 	}
 
 	hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeRegisterFailed,
+			"注册失败",
+			err,
+		)
 	}
 	user := model.User{
 		Username:     username,
@@ -55,7 +56,16 @@ func Register(req request.RegisterRequest) error {
 		Nickname:     username,
 		Status:       model.UserStatusActive,
 	}
-	return dao.CreateUser(global.DB, &user)
+
+	if err := dao.CreateUser(global.DB, &user); err != nil {
+		return apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeRegisterFailed,
+			"注册失败",
+			err,
+		)
+	}
+	return nil
 }
 
 func Login(req request.LoginRequest) (*model.User, error) {
@@ -65,9 +75,14 @@ func Login(req request.LoginRequest) (*model.User, error) {
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
+			return nil, ErrInvalidCredentials
 		}
-		return nil, err
+		return nil, apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeLoginFailed,
+			"登录错误",
+			err,
+		)
 	}
 
 	if user.Status != model.UserStatusActive {
@@ -75,7 +90,7 @@ func Login(req request.LoginRequest) (*model.User, error) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, ErrPasswordWrong
+		return nil, ErrInvalidCredentials
 	}
 
 	return user, nil
@@ -91,7 +106,12 @@ func GetProfile(userID int64) (*model.User, error) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
 		}
-		return nil, err
+		return nil, apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeGetProfileFailed,
+			"获取用户信息失败",
+			err,
+		)
 	}
 
 	if user.Status != model.UserStatusActive {
@@ -117,12 +137,25 @@ func UpdateNickname(userID int64, nickname string) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrUserNotFound
 		}
-		return err
+		return apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeUpdateNicknameFailed,
+			"更改昵称失败",
+			err,
+		)
 	}
 
 	if user.Status != model.UserStatusActive {
 		return ErrUserDisabled
 	}
 
-	return dao.UpdateNicknameByID(global.DB, userID, nickname)
+	if err := dao.UpdateNicknameByID(global.DB, userID, nickname); err != nil {
+		return apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeUpdateNicknameFailed,
+			"更改昵称失败",
+			err,
+		)
+	}
+	return nil
 }

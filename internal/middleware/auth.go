@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"errors"
-	"go-user-system/response"
-	"go-user-system/utils"
+	"go-user-system/internal/response"
+	"go-user-system/internal/utils"
 	"net/http"
 	"strings"
 
@@ -15,20 +15,20 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 		if authHeader == "" {
-			response.Fail(c, http.StatusUnauthorized, 3001, "authorization header is empty")
+			response.Fail(c, http.StatusUnauthorized, response.CodeTokenMissing, "authorization header is empty")
 			c.Abort()
 			return
 		}
 
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			response.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization Bearer")
+			response.Fail(c, http.StatusUnauthorized, response.CodeTokenInvalidFormat, "invalid authorization Bearer")
 			c.Abort()
 			return
 		}
 
 		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 		if tokenString == "" {
-			response.Fail(c, http.StatusUnauthorized, 3002, "invalid authorization header")
+			response.Fail(c, http.StatusUnauthorized, response.CodeTokenInvalidFormat, "invalid authorization header")
 			c.Abort()
 			return
 		}
@@ -37,13 +37,13 @@ func AuthMiddleware() gin.HandlerFunc {
 		if err != nil {
 			switch {
 			case errors.Is(err, jwt.ErrTokenMalformed):
-				response.Fail(c, http.StatusUnauthorized, 3003, "token is malformed")
+				response.Fail(c, http.StatusUnauthorized, response.CodeTokenMalformed, "token is malformed")
 			case errors.Is(err, jwt.ErrTokenSignatureInvalid):
-				response.Fail(c, http.StatusUnauthorized, 3003, "token signature is invalid")
+				response.Fail(c, http.StatusUnauthorized, response.CodeTokenSignatureInvalid, "token signature is invalid")
 			case errors.Is(err, jwt.ErrTokenExpired):
-				response.Fail(c, http.StatusUnauthorized, 3003, "token is expired")
+				response.Fail(c, http.StatusUnauthorized, response.CodeTokenExpired, "token is expired")
 			default:
-				response.Fail(c, http.StatusUnauthorized, 3003, "invalid token")
+				response.Fail(c, http.StatusUnauthorized, response.CodeTokenInvalid, "invalid token")
 			}
 			c.Abort()
 			return

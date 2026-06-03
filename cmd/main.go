@@ -5,9 +5,9 @@ import (
 	"go-user-system/config"
 	"go-user-system/database"
 	"go-user-system/global"
-	"go-user-system/model"
+	"go-user-system/internal/model"
+	"go-user-system/internal/utils"
 	"go-user-system/router"
-	"go-user-system/utils"
 	"log"
 )
 

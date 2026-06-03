@@ -1,7 +1,7 @@
 package dao
 
 import (
-	"go-user-system/model"
+	"go-user-system/internal/model"
 
 	"gorm.io/gorm"
 )

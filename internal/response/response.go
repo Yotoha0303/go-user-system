@@ -11,7 +11,7 @@ type Response struct {
 }
 
 func Success(c *gin.Context, data interface{}) {
-	c.JSON(200, Response{
+	c.JSON(CodeSuccess, Response{
 		Code: 0,
 		Msg:  "success",
 		Data: data,

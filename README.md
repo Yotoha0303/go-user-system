@@ -1,4 +1,4 @@
-# go-user-system（Go 认证与基础用户系统项目）
+﻿# go-user-system（Go 认证与基础用户系统项目）
 
 ## 1. 项目简介
 
@@ -51,19 +51,24 @@
 ## 4. 项目结构
 
 ```text
-api/        HTTP 接口层，负责参数绑定和响应返回
-service/    业务逻辑层，负责注册、登录、用户状态判断、昵称修改等业务规则
-dao/        数据访问层，负责用户表的增删查改
-database/   数据库初始化，负责 MySQL 连接创建
-model/      数据模型层，定义 User 实体和状态常量
-request/    请求参数结构
-response/   统一响应结构和响应方法
-router/     路由注册、接口分组、中间件挂载
-middleware/ JWT 鉴权中间件
-utils/      通用工具，目前主要为 JWT 工具
-config/     配置加载，读取 config.yml 和 .env
-global/     全局资源，目前保存 DB 实例
-docs/       测试用例和 SQL 文件
+cmd/                    程序入口：初始化配置、数据库、JWT，并启动 HTTP 服务
+config/                 配置加载：读取 config.yml 和 .env
+database/               数据库初始化：创建 MySQL 连接
+global/                 全局资源：保存 DB 等跨模块实例
+router/                 路由注册：接口分组和中间件挂载
+internal/
+  apperror/             应用错误：封装 HTTP 状态码、业务错误码和错误信息
+  handler/              接口处理：参数绑定、调用 service、返回统一响应
+  middleware/           中间件：JWT 鉴权等横切逻辑
+  service/              业务逻辑：注册、登录、用户状态判断、昵称修改
+  dao/                  数据访问：用户表查询、创建和更新
+  model/                数据模型：User 实体和状态常量
+  request/              请求结构：定义接口入参 DTO
+  response/             响应结构：统一响应体、业务错误码和响应方法
+  utils/                通用工具：JWT 生成与解析
+docs/
+  http/                 REST Client 手动测试用例
+  sql/                  数据库初始化或重置 SQL 文件
 ```
 
 ## 5. SQL 结构
