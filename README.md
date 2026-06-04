@@ -91,15 +91,41 @@ CREATE TABLE `users`  (
 
 ## 6. 环境变量
 
-项目通过 `.env` 读取数据库配置：
+应用启动时先读取 `config.yml`，再使用环境变量覆盖对应配置。本地运行时会自动加载项目根目录下的 `.env`。
 
-```.env
-DB_PASSWORD=your_password
+首次本地启动前，复制环境变量示例并修改真实配置：
 
-JWT_SECRET=replace_with_a_long_random_secret
+```bash
+cp .env.example .env
 ```
 
-服务端口配置在 `config.yml`：
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` 至少需要配置：
+
+```dotenv
+DB_PASSWORD=your_mysql_password
+JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+```
+
+支持通过环境变量覆盖的配置：
+
+| 环境变量 | 说明 | 默认值来源 |
+| --- | --- | --- |
+| `APP_PORT` | HTTP 服务端口 | `config.yml` |
+| `DB_HOST` | MySQL 地址 | `config.yml` |
+| `DB_PORT` | MySQL 端口 | `config.yml` |
+| `DB_USER` | MySQL 用户名 | `config.yml` |
+| `DB_PASSWORD` | MySQL 密码，必填 | `.env` 或运行环境 |
+| `DB_NAME` | MySQL 数据库名 | `config.yml` |
+| `JWT_SECRET` | JWT 签名密钥，必填 | `.env` 或运行环境 |
+| `JWT_EXPIRE_HOURS` | JWT 有效期，单位为小时 | `config.yml` |
+
+默认非敏感配置位于 `config.yml`：
 
 ```yaml
 server:
@@ -115,9 +141,89 @@ jwt:
 
 ## 7. 启动方式
 
-go mod tidy
+服务启动后监听 `http://127.0.0.1:8082`。应用会通过 GORM 自动创建或更新 `users` 表，但不会自动创建本地 MySQL 数据库。
 
-go run main.go
+### 7.1 使用 Docker Compose 启动（推荐）
+
+前置条件：
+
+- 已安装并启动 Docker Desktop，或 Docker Engine + Docker Compose
+- Docker 可以访问 Docker Hub，用于拉取 `golang:1.25.5-alpine`、`alpine:3.22` 和 `mysql:8.4`
+
+启动应用和 MySQL：
+
+```bash
+make compose-up
+```
+
+未安装 `make` 时，直接执行：
+
+```bash
+docker compose up -d --build
+```
+
+查看应用日志：
+
+```bash
+make compose-logs
+# 或
+docker compose logs -f app
+```
+
+检查服务：
+
+```bash
+curl http://127.0.0.1:8082/ping
+```
+
+停止并删除容器：
+
+```bash
+make compose-down
+# 或
+docker compose down
+```
+
+MySQL 数据保存在 `mysql_data` volume 中，普通的 `compose-down` 不会删除数据。当前 `compose.yaml` 中的数据库密码和 JWT 密钥仅用于本地开发，不应直接用于生产环境。
+
+### 7.2 本地启动 Go 服务
+
+前置条件：
+
+- 已安装 Go `1.25.5`
+- 已启动 MySQL，并创建数据库 `go_user_system`
+- 已根据第 6 节创建并配置 `.env`
+
+创建数据库：
+
+```sql
+CREATE DATABASE go_user_system
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
+```
+
+下载依赖并启动服务：
+
+```bash
+go mod download
+make run
+```
+
+未安装 `make` 时，直接执行：
+
+```bash
+go run ./cmd
+```
+
+### 7.3 仅构建 Docker 镜像
+
+以下命令只构建应用镜像，不会启动 MySQL 或应用容器：
+
+```bash
+make docker-build
+# 或
+docker build -t go-user-system:dev .
+```
 
 ## 8. 接口说明
 
