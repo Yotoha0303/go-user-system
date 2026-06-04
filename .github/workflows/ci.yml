@@ -31,4 +31,4 @@ jobs:
         run: go build -o go-user-system ./cmd
 
       - name: Build Docker image
-        run: docker build -t go-user-system:ci
+        run: docker build -t go-user-system:ci .
