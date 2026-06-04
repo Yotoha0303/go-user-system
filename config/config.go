@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
@@ -51,5 +52,34 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("%w: %v", ErrUnmarshalConfigFileDataFailed, err)
 	}
 
+	applyEnvOverrides(&cfg)
+
 	return &cfg, nil
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("APP_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Server.Port = port
+		}
+	}
+
+	if v := os.Getenv("DB_HOST"); v != "" {
+		cfg.MySQL.Host = v
+	}
+	if v := os.Getenv("DB_PORT"); v != "" {
+		cfg.MySQL.Port = v
+	}
+	if v := os.Getenv("DB_USER"); v != "" {
+		cfg.MySQL.User = v
+	}
+	if v := os.Getenv("DB_NAME"); v != "" {
+		cfg.MySQL.Database = v
+	}
+
+	if v := os.Getenv("JWT_EXPIRE_HOURS"); v != "" {
+		if hours, err := strconv.Atoi(v); err == nil {
+			cfg.JWT.ExpireHours = hours
+		}
+	}
 }
