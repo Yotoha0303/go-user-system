@@ -60,4 +60,10 @@ var (
 		response.CodeNicknameInvalid,
 		"nickname is empty",
 	)
+
+	ErrDatabaseNotInitialized = apperror.New(
+		http.StatusInternalServerError,
+		response.CodeDatabaseNotInitialized,
+		"database is not initialized",
+	)
 )

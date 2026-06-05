@@ -27,6 +27,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Run vet
+        run: go vet ./...
+
       - name: Build binary
         run: go build -o go-user-system ./cmd
 

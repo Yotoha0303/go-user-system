@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go-user-system/config"
 	"go-user-system/database"
-	"go-user-system/global"
 	"go-user-system/internal/model"
 	"go-user-system/internal/utils"
 	"go-user-system/router"
@@ -32,9 +31,8 @@ func main() {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		log.Fatalf("auto migrate failed:%v", err)
 	}
-	global.DB = db
 
-	r := router.SetupRouter()
+	r := router.SetupRouter(db)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	fmt.Println("server starting at", addr)

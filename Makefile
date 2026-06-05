@@ -1,13 +1,16 @@
 APP_NAME := go-user-system
 IMAGE_NAME := go-user-system:dev
 
-.PHONY: run test build clean tidy docker-build compose-up compose-down compose-logs
+.PHONY: run test vet build clean tidy docker-build compose-up compose-down compose-logs ci
 
 run:
 	go run ./cmd
 
 test:
 	go test ./...
+
+vet:
+	go vet ./...
 
 build:
 	mkdir -p bin
@@ -30,3 +33,5 @@ compose-down:
 
 compose-logs:
 	docker compose logs -f app
+
+ci: test vet build docker-build

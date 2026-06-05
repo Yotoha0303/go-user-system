@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"go-user-system/global"
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/dao"
 	"go-user-system/internal/model"
@@ -16,7 +15,22 @@ import (
 	"gorm.io/gorm"
 )
 
-func Register(req request.RegisterRequest) error {
+type UserService struct {
+	db *gorm.DB
+}
+
+func NewUserService(db *gorm.DB) *UserService {
+	return &UserService{db: db}
+}
+
+func (s *UserService) ensureDB() error {
+	if s == nil || s.db == nil {
+		return ErrDatabaseNotInitialized
+	}
+	return nil
+}
+
+func (s *UserService) Register(req request.RegisterRequest) error {
 
 	username := strings.TrimSpace(req.Username)
 
@@ -28,7 +42,11 @@ func Register(req request.RegisterRequest) error {
 		return ErrPasswordTooShort
 	}
 
-	userInfo, err := dao.GetUserByUsername(global.DB, username)
+	if err := s.ensureDB(); err != nil {
+		return err
+	}
+
+	userInfo, err := dao.GetUserByUsername(s.db, username)
 	if err == nil && userInfo != nil {
 		return ErrUsernameAlreadyExists
 	}
@@ -57,7 +75,7 @@ func Register(req request.RegisterRequest) error {
 		Status:       model.UserStatusActive,
 	}
 
-	if err := dao.CreateUser(global.DB, &user); err != nil {
+	if err := dao.CreateUser(s.db, &user); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeRegisterFailed,
@@ -68,10 +86,14 @@ func Register(req request.RegisterRequest) error {
 	return nil
 }
 
-func Login(req request.LoginRequest) (*model.User, error) {
+func (s *UserService) Login(req request.LoginRequest) (*model.User, error) {
 	username := strings.TrimSpace(req.Username)
 
-	user, err := dao.GetUserByUsername(global.DB, username)
+	if err := s.ensureDB(); err != nil {
+		return nil, err
+	}
+
+	user, err := dao.GetUserByUsername(s.db, username)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -96,12 +118,16 @@ func Login(req request.LoginRequest) (*model.User, error) {
 	return user, nil
 }
 
-func GetProfile(userID int64) (*model.User, error) {
+func (s *UserService) GetProfile(userID int64) (*model.User, error) {
 	if userID <= 0 {
 		return nil, ErrInvalidUserID
 	}
 
-	user, err := dao.GetUserByID(global.DB, userID)
+	if err := s.ensureDB(); err != nil {
+		return nil, err
+	}
+
+	user, err := dao.GetUserByID(s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -121,7 +147,11 @@ func GetProfile(userID int64) (*model.User, error) {
 	return user, nil
 }
 
-func UpdateNickname(userID int64, nickname string) error {
+func (s *UserService) UpdateNickname(userID int64, nickname string) error {
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+
 	nickname = strings.TrimSpace(nickname)
 
 	if nickname == "" {
@@ -132,7 +162,11 @@ func UpdateNickname(userID int64, nickname string) error {
 		return ErrNicknameTooLong
 	}
 
-	user, err := dao.GetUserByID(global.DB, userID)
+	if err := s.ensureDB(); err != nil {
+		return err
+	}
+
+	user, err := dao.GetUserByID(s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrUserNotFound
@@ -149,7 +183,7 @@ func UpdateNickname(userID int64, nickname string) error {
 		return ErrUserDisabled
 	}
 
-	if err := dao.UpdateNicknameByID(global.DB, userID, nickname); err != nil {
+	if err := dao.UpdateNicknameByID(s.db, userID, nickname); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeUpdateNicknameFailed,

@@ -3,49 +3,52 @@ package router
 import (
 	"go-user-system/internal/handler"
 	"go-user-system/internal/middleware"
-	"go-user-system/internal/response"
+	"go-user-system/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
-	registerHealthRoutes(r)
-	registerAPIRoutes(r)
+	userService := service.NewUserService(db)
+	userHandler := handler.NewUserHandler(userService)
+	healthHandler := handler.NewHealthHandler(db)
+
+	registerHealthRoutes(r, healthHandler)
+	registerAPIRoutes(r, userHandler)
 
 	return r
 }
 
-func registerHealthRoutes(r *gin.Engine) {
-	r.GET("/ping", func(c *gin.Context) {
-		response.Success(c, gin.H{
-			"message": "success",
-		})
-	})
+func registerHealthRoutes(r *gin.Engine, healthHandler *handler.HealthHandler) {
+	r.GET("/ping", healthHandler.PingHandler)
+	r.GET("/livez", healthHandler.LivezHandler)
+	r.GET("/readyz", healthHandler.ReadyzHandler)
 }
 
-func registerAPIRoutes(rg *gin.Engine) {
+func registerAPIRoutes(rg *gin.Engine, userHandler *handler.UserHandler) {
 	apiV1 := rg.Group("/api/v1")
 
-	registerAuthRoutes(apiV1)
-	registerUsersRoutes(apiV1)
+	registerAuthRoutes(apiV1, userHandler)
+	registerUsersRoutes(apiV1, userHandler)
 }
 
-func registerAuthRoutes(rg *gin.RouterGroup) {
+func registerAuthRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) {
 	auth := rg.Group("/auth")
 	{
-		auth.POST("/register", handler.RegisterHandler)
-		auth.POST("/login", handler.LoginHandler)
+		auth.POST("/register", userHandler.RegisterHandler)
+		auth.POST("/login", userHandler.LoginHandler)
 
 	}
 }
 
-func registerUsersRoutes(rg *gin.RouterGroup) {
+func registerUsersRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) {
 	users := rg.Group("/users")
 	users.Use(middleware.AuthMiddleware())
 	{
-		users.GET("/me", handler.MeHandler)
-		users.PUT("/me/profile", handler.UpdateProfileHandler)
+		users.GET("/me", userHandler.MeHandler)
+		users.PUT("/me/profile", userHandler.UpdateProfileHandler)
 	}
 }

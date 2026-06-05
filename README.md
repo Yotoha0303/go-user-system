@@ -1,99 +1,93 @@
-﻿# go-user-system（Go 认证与基础用户系统项目）
+# go-user-system（Go 认证与基础用户系统）
 
-## 1. 项目简介
+基于 Go + Gin + GORM + MySQL 实现的用户认证系统，支持用户注册、登录、bcrypt 密码哈希、JWT 鉴权、当前用户信息查询和昵称修改。
 
-基于 Go + Gin + GORM + MySQL 实现用户认证系统，支持注册、登录、bcrypt 密码哈希、JWT 鉴权、当前用户信息查询和昵称修改。
+当前项目已经补充基础工程化能力：配置分层、Docker Compose 本地部署、健康检查、数据库 migration、自动化测试、CI 质量门禁和部署检查清单。
 
-项目采用 api/service/ dao/ model/ 分层结构，使用环境变量管理数据库与 JWT 配置，并通过统一响应结构和业务错误映射提升接口规范性。
+## 1. 功能概览
 
-## 2. 技术栈
-
-- Go
-
-- Gin
-
-- GORM
-
-- MySQL
-
-- bcrypt
-
-- JWT
-
-- godotenv
-
-- YAML 配置
-
-## 3. 核心功能
-
-- 用户注册
-
-- 用户登录
-
-- 修改昵称
-
+- 用户注册、登录、当前用户查询、昵称修改
 - bcrypt 密码哈希存储
+- JWT 签发、解析和鉴权中间件
+- 统一响应结构和业务错误码
+- `/ping`、`/livez`、`/readyz` 健康检查
+- Dockerfile + Docker Compose 本地部署
+- `go test`、`go vet`、`go build`、Docker 镜像构建 CI
+- 数据库建表 migration 和生产部署前检查清单
 
-- 用户状态校验
-
-- JWT 生成
-
-- JWT 中间件鉴权
-
-- GET /api/v1/users/me 当前用户信息
-
-- 统一响应结构
-
-- 环境变量配置
-
-- README + 接口文档
-
-## 4. 项目结构
+## 2. 项目结构
 
 ```text
-cmd/                    程序入口：初始化配置、数据库、JWT，并启动 HTTP 服务
-config/                 配置加载：读取 config.yml 和 .env
-database/               数据库初始化：创建 MySQL 连接
-global/                 全局资源：保存 DB 等跨模块实例
-router/                 路由注册：接口分组和中间件挂载
+cmd/                    程序入口
+config/                 配置加载：config.yml + 环境变量覆盖
+database/               MySQL / GORM 初始化
+router/                 路由注册和分组
 internal/
-  apperror/             应用错误：封装 HTTP 状态码、业务错误码和错误信息
-  handler/              接口处理：参数绑定、调用 service、返回统一响应
-  middleware/           中间件：JWT 鉴权等横切逻辑
-  service/              业务逻辑：注册、登录、用户状态判断、昵称修改
-  dao/                  数据访问：用户表查询、创建和更新
-  model/                数据模型：User 实体和状态常量
-  request/              请求结构：定义接口入参 DTO
-  response/             响应结构：统一响应体、业务错误码和响应方法
-  utils/                通用工具：JWT 生成与解析
+  apperror/             应用错误模型
+  handler/              HTTP 处理器
+  middleware/           JWT 鉴权中间件
+  service/              业务逻辑
+  dao/                  数据访问
+  model/                数据模型
+  request/              请求 DTO
+  response/             响应结构和业务错误码
+  utils/                JWT 工具
 docs/
-  http/                 REST Client 手动测试用例
-  sql/                  数据库初始化或重置 SQL 文件
+  http/                 REST Client 手动测试
+  sql/                  本地 SQL 辅助脚本
+  deploy/               本地部署与生产检查文档
+migrations/             数据库迁移脚本
 ```
 
-## 5. SQL 结构
+## 3. 依赖注入说明
+
+项目不再通过 `global.DB` 暴露数据库连接，而是在 `cmd/main.go` 初始化 `*gorm.DB` 后传入 `router.SetupRouter(db)`，再由 router 统一装配 service 和 handler。
+
+依赖链：
 
 ```text
-CREATE TABLE `users`  (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `username` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
-  `nickname` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '',
-  `status` tinyint NOT NULL DEFAULT 1,
-  `created_at` datetime(3) NULL DEFAULT NULL,
-  `updated_at` datetime(3) NULL DEFAULT NULL,
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `idx_username`(`username` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
-
-
+cmd/main.go
+  -> router.SetupRouter(db)
+  -> service.NewUserService(db)
+  -> handler.NewUserHandler(userService)
+  -> dao 使用 service 持有的 db 执行查询
 ```
 
-## 6. 环境变量
+问题：全局 DB 会让 service 隐式依赖外部状态。
 
-应用启动时先读取 `config.yml`，再使用环境变量覆盖对应配置。本地运行时会自动加载项目根目录下的 `.env`。
+原因：调用 service 方法时看不出它依赖数据库，测试时也必须提前修改全局变量。
 
-首次本地启动前，复制环境变量示例并修改真实配置：
+修改建议：通过构造函数显式传入依赖。
+
+示例：
+
+```go
+userService := service.NewUserService(db)
+userHandler := handler.NewUserHandler(userService)
+```
+
+## 4. 配置说明
+
+### 配置来源
+
+| 文件 / 来源 | 作用 | 是否提交 |
+| --- | --- | --- |
+| `config.yml` | 非敏感默认配置 | 是 |
+| `.env.example` | 本地和 Compose 的主配置模板 | 是 |
+| `.env` | 本地真实配置，应用和 Compose 默认读取 | 否 |
+| shell 环境变量 | CI、服务器或容器运行时注入 | 否 |
+
+启动时会从当前工作目录开始向上查找 `.env` 和 `config.yml`。因此无论从项目根目录执行 `go run ./cmd`，还是 IDE 以 `cmd/` 作为工作目录启动，都能加载项目根目录下的 `.env`。
+
+### 重复配置处理
+
+问题：如果本地运行和 Compose 分别维护不同 env 模板，容易出现同一个配置在多处不一致。
+
+原因：Docker Compose 默认会读取项目根目录 `.env`，应用本地运行也会通过 `godotenv` 读取同一个 `.env`，因此维护两个模板会导致配置来源不清晰。
+
+修改建议：统一只维护 `.env.example` 一个模板。日常开发复制 `.env.example` 为 `.env`，不要维护多份真实配置。
+
+示例：
 
 ```bash
 cp .env.example .env
@@ -112,87 +106,61 @@ DB_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 ```
 
-支持通过环境变量覆盖的配置：
+Compose 会使用同一个 `DB_PASSWORD` 作为 MySQL root 密码和应用连接密码，并使用 `JWT_SECRET` 初始化 JWT 签名密钥。
 
-| 环境变量 | 说明 | 默认值来源 |
-| --- | --- | --- |
-| `APP_PORT` | HTTP 服务端口 | `config.yml` |
-| `DB_HOST` | MySQL 地址 | `config.yml` |
-| `DB_PORT` | MySQL 端口 | `config.yml` |
-| `DB_USER` | MySQL 用户名 | `config.yml` |
-| `DB_PASSWORD` | MySQL 密码，必填 | `.env` 或运行环境 |
-| `DB_NAME` | MySQL 数据库名 | `config.yml` |
-| `JWT_SECRET` | JWT 签名密钥，必填 | `.env` 或运行环境 |
-| `JWT_EXPIRE_HOURS` | JWT 有效期，单位为小时 | `config.yml` |
+`compose.yaml` 中的 `DB_HOST=mysql`、`DB_USER=root`、`DB_NAME=go_user_system` 是容器网络下的固定覆盖值，不是和 `config.yml` 重复维护；本地直接运行 Go 服务时仍使用 `config.yml` 和 `.env`。
 
-默认非敏感配置位于 `config.yml`：
+## 5. 快速启动
 
-```yaml
-server:
-  port: 8082
-mysql:
-  host: 127.0.0.1
-  port: "3306"
-  user: root
-  database: go_user_system
-jwt:
-  expireHours: 24
-```
-
-## 7. 启动方式
-
-服务启动后监听 `http://127.0.0.1:8082`。应用会通过 GORM 自动创建或更新 `users` 表，但不会自动创建本地 MySQL 数据库。
-
-### 7.1 使用 Docker Compose 启动（推荐）
+### 4.1 Docker Compose 启动（推荐）
 
 前置条件：
 
-- 已安装并启动 Docker Desktop，或 Docker Engine + Docker Compose
-- Docker 可以访问 Docker Hub，用于拉取 `golang:1.25.5-alpine`、`alpine:3.22` 和 `mysql:8.4`
+- 已安装 Docker Desktop，或 Docker Engine + Docker Compose
+- 已复制 `.env.example` 为 `.env`
+- `.env` 中已配置 `DB_PASSWORD` 和 `JWT_SECRET`
+- 本地端口 `8082`、`3306` 未被占用
 
-启动应用和 MySQL：
-
-```bash
-make compose-up
-```
-
-未安装 `make` 时，直接执行：
+启动：
 
 ```bash
 docker compose up -d --build
 ```
 
-查看应用日志：
+或：
 
 ```bash
-make compose-logs
-# 或
+make compose-up
+```
+
+查看日志：
+
+```bash
 docker compose logs -f app
 ```
 
-检查服务：
+停止：
 
 ```bash
-curl http://127.0.0.1:8082/ping
-```
-
-停止并删除容器：
-
-```bash
-make compose-down
-# 或
 docker compose down
 ```
 
-MySQL 数据保存在 `mysql_data` volume 中，普通的 `compose-down` 不会删除数据。当前 `compose.yaml` 中的数据库密码和 JWT 密钥仅用于本地开发，不应直接用于生产环境。
+删除本地 MySQL 数据卷：
 
-### 7.2 本地启动 Go 服务
+```bash
+docker compose down -v
+```
+
+更完整的 Compose 说明见 `docs/deploy/local-compose.md`。
+
+### 4.2 本地 Go 启动
 
 前置条件：
 
 - 已安装 Go `1.25.5`
-- 已启动 MySQL，并创建数据库 `go_user_system`
-- 已根据第 6 节创建并配置 `.env`
+- 已启动 MySQL
+- 已创建数据库 `go_user_system`
+- 已配置 `.env`
 
 创建数据库：
 
@@ -202,380 +170,139 @@ CREATE DATABASE go_user_system
   COLLATE utf8mb4_0900_ai_ci;
 ```
 
-下载依赖并启动服务：
+启动：
 
 ```bash
 go mod download
-make run
-```
-
-未安装 `make` 时，直接执行：
-
-```bash
 go run ./cmd
 ```
 
-### 7.3 仅构建 Docker 镜像
-
-以下命令只构建应用镜像，不会启动 MySQL 或应用容器：
+或：
 
 ```bash
-make docker-build
-# 或
-docker build -t go-user-system:dev .
+make run
 ```
 
-## 8. 接口说明
+## 6. 健康检查
 
-GET /ping
+| 接口 | 作用 | 是否检查 DB |
+| --- | --- | --- |
+| `GET /ping` | 兼容旧的基础健康检查 | 否 |
+| `GET /livez` | 应用进程存活检查 | 否 |
+| `GET /readyz` | 服务就绪检查 | 是 |
 
-响应
+验证：
 
-```
-{
-    "code": 0,
-    "msg": "success",
-    "data": {
-        "message": "success"
-    }
-}
-```
-
-POST /api/v1/auth/register
-
-请求：
-
-```
-{
-  "username": "yotoha",
-  "password": "123456"
-}
+```bash
+curl http://127.0.0.1:8082/ping
+curl http://127.0.0.1:8082/livez
+curl http://127.0.0.1:8082/readyz
 ```
 
-响应：
+`compose.yaml` 中的 app healthcheck 使用 `/readyz`，避免数据库不可用时误判服务健康。
 
-```
-{
-  "code": 0,
-  "msg": "success",
-  "data": null
-}
-```
+## 7. API 概览
 
-POST /api/v1/auth/login
+| 方法 | 路径 | 说明 | 鉴权 |
+| --- | --- | --- | --- |
+| `GET` | `/ping` | 基础健康检查 | 否 |
+| `GET` | `/livez` | 应用存活检查 | 否 |
+| `GET` | `/readyz` | 服务就绪检查 | 否 |
+| `POST` | `/api/v1/auth/register` | 用户注册 | 否 |
+| `POST` | `/api/v1/auth/login` | 用户登录 | 否 |
+| `GET` | `/api/v1/users/me` | 当前用户信息 | 是 |
+| `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称 | 是 |
 
-请求：
+手动测试文件见 `docs/http/test.http`。
 
-```
-{
-  "username": "yotoha",
-  "password": "123456"
-}
-```
+## 8. 数据库迁移
 
-响应：
+当前项目保留 GORM `AutoMigrate`，用于本地开发阶段快速建表。真实部署时建议优先执行 `migrations/` 下的 SQL 脚本。
 
-```
-{
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "access_token": "xxx",
-    "user": {
-      "id": 1,
-      "username": "yotoha",
-      "nickname": "yotoha",
-      "status": 1
-    }
-  }
-}
+| 文件 | 作用 |
+| --- | --- |
+| `migrations/001_create_users.up.sql` | 创建 `users` 表 |
+| `migrations/001_create_users.down.sql` | 删除 `users` 表 |
+
+问题：README 中不再重复粘贴完整建表 SQL。
+
+原因：SQL 内容应以 `migrations/` 为唯一权威来源，避免 README 和脚本不一致。
+
+修改建议：查看或修改表结构时，以 migration 文件为准。
+
+示例：
+
+```bash
+cat migrations/001_create_users.up.sql
 ```
 
-GET /api/v1/users/me
+## 9. 工程化命令
 
-Header：
+| 命令 | 作用 |
+| --- | --- |
+| `make run` | 本地运行 Go 服务 |
+| `make test` | 执行 `go test ./...` |
+| `make vet` | 执行 `go vet ./...` |
+| `make build` | 构建 Linux 二进制到 `bin/go-user-system` |
+| `make docker-build` | 构建 Docker 镜像 |
+| `make compose-up` | 启动 Compose 环境 |
+| `make compose-down` | 停止 Compose 环境 |
+| `make compose-logs` | 查看 app 容器日志 |
+| `make ci` | 串联 test、vet、build、docker-build |
 
-```
-Authorization: Bearer {access_token}
-```
+注意：`Makefile` 中的 `build`、`clean` 使用类 Unix 命令。Windows 原生 PowerShell 下建议使用 Git Bash、WSL 或直接运行 Go / Docker 命令。
 
-响应：
+## 10. CI 质量门禁
 
-```
-{
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "id": 1,
-    "username": "yotoha",
-    "nickname": "yotoha",
-    "status": 1
-  }
-}
-```
+CI 配置位于 `.github/workflows/ci.yml`。
 
-PUT /api/v1/users/me/profile
+执行流程：
 
-Header：
+1. `actions/checkout@v4`
+2. `actions/setup-go@v5`
+3. `go mod download`
+4. `go test ./...`
+5. `go vet ./...`
+6. `go build -o go-user-system ./cmd`
+7. `docker build -t go-user-system:ci .`
 
-```
-Authorization: Bearer {access_token}
-```
+本地可用以下命令提前验证：
 
-请求
-
-```
-{
-  "nickname":"new_name"
-}
-```
-
-响应：
-
-```
-{
-    "code": 0,
-    "msg": "success",
-    "data": null
-}
+```bash
+go test ./...
+go vet ./...
+go build -o bin/go-user-system.exe ./cmd
 ```
 
-## 9. 手动测试流程
+## 11. 部署检查
 
-```
-# 0、健康检查
-curl http://localhost:8082/ping
+生产部署前不要直接复用本地开发配置。检查清单见：
 
-# 1、注册
-  示例
+- `docs/deploy/production-checklist.md`
 
-curl -X POST http://localhost:8082/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"yotoha","password":"123456"}'
+关键要求：
 
-# 2、登录
-curl -X POST http://localhost:8082/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"yotoha","password":"123456"}'
+- `JWT_SECRET` 使用 32 位以上强随机字符串
+- 生产环境不使用 MySQL `root` 用户连接业务库
+- `.env`、`.env.*`、`config.local.yml` 不提交到 Git
+- `/readyz` 必须返回 200
+- 注册、登录、鉴权、修改昵称核心链路验证通过
 
+## 12. 本次重复内容清理结果
 
-# 3、获取用户信息(备注：获取access_token需要先调用登录接口，再替换下面命令中的值)
-curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}"
+问题：README 原先同时承担项目介绍、完整 SQL、详细接口说明、手动测试流程、部署说明和设计复盘，内容重复且容易过期。
 
+原因：多个文档都在描述同一件事，例如 README 和 `docs/deploy/local-compose.md` 都写 Compose 步骤，README 和 `migrations/` 都写建表 SQL。
 
-# 4、修改昵称
-curl -X PUT http://localhost:8082/api/v1/users/me/profile \
-   -H "Content-Type: application/json" \
-   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-   -d '{"nickname":"new_name"}'
+修改建议：README 只作为入口文档，细节放到专门文件。
 
-# 5、再次获取用户信息
-curl http://localhost:8082/api/v1/users/me \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}"
+示例：
 
-```
+- SQL 结构以 `migrations/` 为准
+- 本地 Compose 细节以 `docs/deploy/local-compose.md` 为准
+- 生产部署检查以 `docs/deploy/production-checklist.md` 为准
+- 手动接口测试以 `docs/http/test.http` 为准
 
-本项目提高手动测试的文件 .http ，需要安装插件 VScode REST Client
+## 13. 简历表达参考
 
-文件位置：[test.http](./docs/http/test.http)
-
-## 10. 最终自测清单
-
-### 服务与环境
-
-- [x] `.env` 配置正确，项目可正常启动
-
-- [x] `GET /ping` 返回 Http 200，且响应体 code = 0，响应结构符合统一格式
-
-### 注册
-
-- [x] 正常注册成功
-
-- [x] 用户名为空时返回正确错误
-
-- [x] 用户名过短时返回正确错误
-
-- [x] 重复注册时返回正确错误
-
-### 登录
-
-- [x] 正常登录成功，返回 `access_token`
-
-- [x] 用户不存在时返回正确错误
-
-- [x] 密码错误时返回正确错误
-
-- [x] 被禁用用户无法登录
-
-### JWT 鉴权
-
-- [x] 不带 token 访问 `/api/v1/users/me` 被拦截
-
-- [x] 错误格式的 Authorization 头被拦截
-
-- [x] 无效 token 被拦截
-
-- [x] 正确 token 可访问 `/api/v1/users/me`
-
-### 用户信息
-
-- [x] `/api/v1/users/me` 返回当前用户信息
-
-- [x] `PUT /api/v1/users/me/profile` 修改昵称成功
-
-- [x] 修改昵称后再次查询，返回最新昵称
-
-## 11. 设计与实现要点
-
-### 1. 分层结构设计
-
-本项目采用 `api/ service/ dao/ model/ middleware/ utils/ config/`的分层结构，将 HTTP 请求处理、业务逻辑、数据访问和通用工具拆开。
-
-这样做的原因是避免所有逻辑都堆积在 handler 中，方便后续的扩展。
-
-- `api` 层负责参数绑定、调用 service、返回统一响应
-
-- `service` 层负责注册、登录、用户状态判断、昵称修改等业务规则
-
-- `dao` 层只负责数据库访问，不处理密码校验和用户状态判断
-
-- `model` 层定义用户实体
-
-- `middleware` 层负责 JWT 鉴权等横切逻辑
-
-- `utils` 层封装 JWT 通用工具函数
-
-- `config` 层负责读取配置和加载环境变量
-
-- `request` 层定义请求参数结构体
-
-- `response` 层定义响应数据结构体
-
-这种拆分避免项目各层之间耦合，让代码职责更清晰。
-
-### 2. 路由分组设计
-
-本项目采用 `/api/v1` 作为接口前缀，并将认证接口 `auth` 和用户资源 `users` 进行接口分组：
-
-- `POST /api/v1/auth/register`
-
-- `POST /api/v1/auth/login`
-
-- `GET /api/v1/users/me`
-
-- `PUT /api/v1/users/me/profile`
-
-
-其中，`/auth` 负责注册和登录，`/users`负责当前用户相关的操作。需要登录的用户接口统一挂载 JWT 鉴权中间件，
-
-避免每个 handler 中重复编写 access_token 校验逻辑。
-
-### 3. 用户注册与密码哈希
-
-在本项目的注册流程中，`service` 层会先校验用户名和密码，再通过 `dao` 层检查用户名是否已经存在。
-
-密码不会以明文的形式保存在数据库中，而是通过 bcrypt 生成哈希后写入 `password_hash` 字段。
-
-注册流程：
-
-```text
-客户端提交用户名和密码：
--> api 层通过 request binding 完成基础参数校验
--> service 层负责用户名查重、密码哈希、用户状态判断等业务逻辑
--> dao 层检查用户名是否已经存在
--> bcrypt 生成密码哈希
--> dao 层创建用户记录
--> GORM/MySQL 持久化用户数据
--> api 统一响应
-```
-
-### 4. 用户登录与 JWT 生成
-
-在用户登录流程中，`service` 层不会直接比对明文密码，而是先根据用户名查询用户记录，
-
-判断用户是否存在、状态是否正常，再使用 bcrypt 校验用户提交的密码与数据库中的密码哈希是否匹配。
-
-登录成功后，`api` 层会调用 JWT 工具生成并返回 access_token 给客户端。
-
-登录流程：
-
-```
-客户端提交用户名和密码：
--> api 层绑定 JSON 参数
--> service 层查询用户、判断状态、校验密码
--> utils 层生成 JWT
--> api 层返回 access_token 和 基础用户信息
-
-```
-
-### 5. 受保护接口与用户上下文
-
-本项目通过 `AuthMiddleware` 统一处理受保护接口的鉴权逻辑。客户端访问受保护接口时，需要在请求头中携带：
-
-```
-Authorization: Bearer {access_token}
-```
-
-该中间件的主要流程为：
-
-```
-读取 Authorization Header
--> 解析并验证 JWT
--> 检验token是否有效或者过期
--> 将 user_id、username 写入 gin.Context
--> 后续 handler 从 Context 中获取当前用户身份
-```
-
-### 6. 当前用户查询与状态校验
-
-受保护接口不会依赖 access_token 中的信息，而是会通过 JWT 校验 access_token 后，才会将 user_id 写入 gin.Context，
-
-随后在 api 层取出 user_id 后，再调用 service 层查询用户记录，并判断用户状态
-
-查询用户和状态的流程：
-
-```
-读取 Authorization Header
--> middleware 层判断 access_token 是否存在、有效、未过期
--> middleware 层将 user_id 写入 gin.Context
--> api 层从 Context 取出 user_id
--> api 层把 user_id 作为参数传递给 service
--> service 层根据 user_id 查询用户记录
--> service 层判断用户是否存在、是否被禁用
--> api 层返回用户信息或错误响应
-```
-
-### 7.统一响应与错误处理
-
-本项目使用统一响应结构返回接口内容:
-
-```
-{
-  "code":0,
-  "msg":"success",
-  "data":null
-}
-```
-
-其中：
-
-- `code` 表示业务错误码
-
-- `msg` 表示成功或错误信息
-
-- `data` 返回具体的业务数据
-
-- HTTP 状态码用于表示请求层结果，业务 `code` 用于表示具体业务错误类型
-
-### 8. 配置与敏感信息管理
-
-本项目采用 .env 配合 godotenv 读取本地环境变量，并通过 .gitignore 忽略真实 .env 文件，避免敏感配置被提交到项目仓库
-
-其中，本项目提供 `.env.example` 作为配置模板：
-
-```.env
-DB_PASSWORD=your_password
-
-JWT_SECRET=replace_with_a_32_plus_chars_random_secret
-```
+基于 Go、Gin、GORM、MySQL 实现用户认证系统，支持注册、登录、JWT 鉴权、用户信息查询和资料修改。项目采用 handler / service / dao / model 分层结构，使用 bcrypt 进行密码哈希存储，并通过统一响应结构和应用错误模型规范接口返回。工程化侧补充 Docker Compose 本地部署、健康检查、数据库 migration、自动化测试和 CI 质量门禁，具备从开发到部署验证的基础闭环。

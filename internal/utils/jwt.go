@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"go-user-system/config"
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,7 +26,10 @@ const InitIssuer = "go-user-system"
 
 func InitJWTKey(cfg *config.Config) error {
 
-	key := os.Getenv("JWT_SECRET")
+	key := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+
+	log.Printf("key: %v", key)
+
 	if key == "" {
 		return ErrJWTSecretNotFound
 	}

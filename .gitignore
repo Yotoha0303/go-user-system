@@ -1,3 +1,15 @@
 .env
+.env.*
+!.env.example
+
 config.local.yml
-config/config.txt
+
+-p
+bin/
+dist/
+tmp/
+logs/
+*.log
+
+coverage.out
+.DS_Store

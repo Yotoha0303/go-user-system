@@ -11,15 +11,15 @@ services:
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_USER: root
-      DB_PASSWORD: root
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       DB_NAME: go_user_system
-      JWT_SECRET: dev_jwt_secret_change_me
-      JWT_EXPIRE_HOURS: "24"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-24}
     depends_on:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/ping"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/readyz"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -32,12 +32,12 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       MYSQL_DATABASE: go_user_system
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot || exit 1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20

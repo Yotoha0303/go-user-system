@@ -3,7 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -37,11 +40,26 @@ var (
 )
 
 func LoadEnv() {
-	_ = godotenv.Load()
+	if path, ok := findFileUpward(".env"); ok {
+		_ = godotenv.Load(path)
+		return
+	}
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("env failed: %v", err)
+	}
 }
 
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	resolvedPath := path
+	if _, err := os.Stat(resolvedPath); err != nil {
+		if foundPath, ok := findFileUpward(path); ok {
+			resolvedPath = foundPath
+		}
+	}
+
+	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrReadConfigFileFailed, err)
 	}
@@ -55,6 +73,72 @@ func Load(path string) (*Config, error) {
 	applyEnvOverrides(&cfg)
 
 	return &cfg, nil
+}
+
+func findFileUpward(name string) (string, bool) {
+	if filepath.IsAbs(name) {
+		info, err := os.Stat(name)
+		return name, err == nil && !info.IsDir()
+	}
+
+	for _, dir := range searchStartDirs() {
+		if path, ok := findFileUpwardFrom(dir, name); ok {
+			return path, true
+		}
+	}
+
+	return "", false
+}
+
+func searchStartDirs() []string {
+	dirs := make([]string, 0, 3)
+	seen := make(map[string]struct{})
+
+	addDir := func(dir string) {
+		if dir == "" {
+			return
+		}
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return
+		}
+		if _, ok := seen[absDir]; ok {
+			return
+		}
+		seen[absDir] = struct{}{}
+		dirs = append(dirs, absDir)
+	}
+
+	dir, err := os.Getwd()
+	if err == nil {
+		addDir(dir)
+	}
+
+	if _, file, _, ok := runtime.Caller(0); ok {
+		addDir(filepath.Dir(file))
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		addDir(filepath.Dir(exePath))
+	}
+
+	return dirs
+}
+
+func findFileUpwardFrom(startDir string, name string) (string, bool) {
+	dir := startDir
+	for {
+		candidate := filepath.Join(dir, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 func applyEnvOverrides(cfg *Config) {

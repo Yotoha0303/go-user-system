@@ -6,6 +6,12 @@
 ### 0. 服务器健康检查
 GET {{baseUrl}}/ping
 
+### 0.1 应用存活检查
+GET {{baseUrl}}/livez
+
+### 0.2 服务就绪检查
+GET {{baseUrl}}/readyz
+
 ### 1. 用户注册
 POST {{baseUrl}}/api/v1/auth/register
 Content-Type: application/json

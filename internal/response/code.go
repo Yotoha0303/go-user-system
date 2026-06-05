@@ -24,4 +24,8 @@ var (
 
 	CodeNicknameInvalid      = 4001
 	CodeUpdateNicknameFailed = 4002
+
+	CodeReadinessFailed = 5001
+
+	CodeDatabaseNotInitialized = 5002
 )

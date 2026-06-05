@@ -1,6 +1,8 @@
 package response
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -11,7 +13,7 @@ type Response struct {
 }
 
 func Success(c *gin.Context, data interface{}) {
-	c.JSON(CodeSuccess, Response{
+	c.JSON(http.StatusOK, Response{
 		Code: 0,
 		Msg:  "success",
 		Data: data,
