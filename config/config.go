@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,9 +44,7 @@ func LoadEnv() {
 		return
 	}
 
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf(".env failed: %v", err)
-	}
+	_ = godotenv.Load()
 }
 
 func Load(path string) (*Config, error) {

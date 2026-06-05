@@ -227,8 +227,10 @@ curl http://127.0.0.1:8082/readyz
 迁移执行规则：
 
 - 启动时自动创建 `schema_migrations` 表
+- 创建 `schema_migrations` 前会先检查表是否已存在，已存在则不重复创建
 - 只执行后缀为 `.up.sql` 的文件
 - 按文件名升序执行，例如 `001_...`、`002_...`
+- 执行每个 migration 前会检查 `schema_migrations.version`，已执行版本会跳过
 - 执行成功后写入 `schema_migrations.version`
 - Docker 镜像会复制 `migrations/` 目录，容器启动时同样自动执行
 

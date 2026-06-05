@@ -22,6 +22,8 @@ type migrationFile struct {
 	path    string
 }
 
+const schemaMigrationsTable = "schema_migrations"
+
 func RunMigrations(db *gorm.DB, dir string) error {
 	if db == nil {
 		return ErrMigrationDatabaseMissing
@@ -59,6 +61,10 @@ func RunMigrations(db *gorm.DB, dir string) error {
 }
 
 func ensureSchemaMigrationsTable(db *gorm.DB) error {
+	if db.Migrator().HasTable(schemaMigrationsTable) {
+		return nil
+	}
+
 	return db.Exec(`
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version VARCHAR(255) NOT NULL,
@@ -86,6 +92,14 @@ func applyMigration(db *gorm.DB, migration migrationFile) error {
 	}
 
 	return db.Transaction(func(tx *gorm.DB) error {
+		applied, err := isMigrationApplied(tx, migration.version)
+		if err != nil {
+			return fmt.Errorf("check migration %s failed: %w", migration.version, err)
+		}
+		if applied {
+			return nil
+		}
+
 		for _, statement := range statements {
 			if err := tx.Exec(statement).Error; err != nil {
 				return fmt.Errorf("apply migration %s failed: %w", migration.version, err)
