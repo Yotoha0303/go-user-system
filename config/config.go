@@ -45,9 +45,8 @@ func LoadEnv() {
 		return
 	}
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf("env failed: %v", err)
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf(".env failed: %v", err)
 	}
 }
 

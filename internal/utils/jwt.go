@@ -20,6 +20,8 @@ var (
 	ErrJWTSecretNotFound    = errors.New("JWT_SECRET is not set")
 	ErrJWTExpireHoursNotSet = errors.New("JWT_EXPIRE_HOURS is not set")
 	ErrAccessTokenInvalid   = errors.New("invalid access token")
+
+	ErrJWTSecretTooShort = errors.New("JWT_SECRET must be at least 32 characters")
 )
 
 const InitIssuer = "go-user-system"
@@ -32,6 +34,10 @@ func InitJWTKey(cfg *config.Config) error {
 
 	if key == "" {
 		return ErrJWTSecretNotFound
+	}
+
+	if len(key) < 32 {
+		return ErrJWTSecretTooShort
 	}
 
 	if cfg.JWT.ExpireHours == 0 {
