@@ -42,6 +42,7 @@ docker compose up -d --build
 - 构建 Go 应用镜像
 - 启动 MySQL `8.4`
 - 创建数据库 `go_user_system`
+- 应用启动时自动执行 `migrations/*.up.sql`
 - 启动应用容器并监听 `8082`
 
 ## 3. 查看运行状态

@@ -20,7 +20,8 @@
 ## 数据库
 
 - [ ] 目标数据库已创建。
-- [ ] 已执行 `migrations/` 下的建表脚本。
+- [ ] 应用启动后已自动执行 `migrations/` 下的 `.up.sql` 脚本。
+- [ ] `schema_migrations` 表中能看到已执行的 migration 版本。
 - [ ] 数据库字符集使用 `utf8mb4`。
 - [ ] 已确认数据库备份和恢复方式。
 

@@ -217,12 +217,20 @@ curl http://127.0.0.1:8082/readyz
 
 ## 8. 数据库迁移
 
-当前项目保留 GORM `AutoMigrate`，用于本地开发阶段快速建表。真实部署时建议优先执行 `migrations/` 下的 SQL 脚本。
+应用启动时不再使用 GORM `AutoMigrate`，而是自动执行 `migrations/` 下尚未执行过的 `.up.sql` 文件。执行记录保存在数据库表 `schema_migrations` 中，避免同一个 migration 被重复执行。
 
 | 文件 | 作用 |
 | --- | --- |
 | `migrations/001_create_users.up.sql` | 创建 `users` 表 |
 | `migrations/001_create_users.down.sql` | 删除 `users` 表 |
+
+迁移执行规则：
+
+- 启动时自动创建 `schema_migrations` 表
+- 只执行后缀为 `.up.sql` 的文件
+- 按文件名升序执行，例如 `001_...`、`002_...`
+- 执行成功后写入 `schema_migrations.version`
+- Docker 镜像会复制 `migrations/` 目录，容器启动时同样自动执行
 
 问题：README 中不再重复粘贴完整建表 SQL。
 
@@ -234,6 +242,13 @@ curl http://127.0.0.1:8082/readyz
 
 ```bash
 cat migrations/001_create_users.up.sql
+```
+
+新增表结构变更时，新增一组 migration 文件：
+
+```text
+migrations/002_your_change.up.sql
+migrations/002_your_change.down.sql
 ```
 
 ## 9. 工程化命令

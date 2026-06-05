@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go-user-system/config"
 	"go-user-system/database"
-	"go-user-system/internal/model"
 	"go-user-system/internal/utils"
 	"go-user-system/router"
 	"log"
@@ -28,8 +27,8 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("auto migrate failed:%v", err)
+	if err := database.RunMigrations(db, "migrations"); err != nil {
+		log.Fatalf("run migrations failed: %v", err)
 	}
 
 	r := router.SetupRouter(db)

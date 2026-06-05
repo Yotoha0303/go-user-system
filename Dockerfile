@@ -19,6 +19,7 @@ RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=builder /app/go-user-system ./go-user-system
 COPY config.yml ./config.yml
+COPY migrations ./migrations
 
 USER app
 
