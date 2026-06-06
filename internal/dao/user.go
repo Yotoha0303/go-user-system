@@ -2,6 +2,7 @@ package dao
 
 import (
 	"go-user-system/internal/model"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -22,4 +23,8 @@ func GetUserByID(db *gorm.DB, id int64) (*model.User, error) {
 
 func UpdateNicknameByID(db *gorm.DB, id int64, nickname string) error {
 	return db.Where("id = ?", id).Model(&model.User{}).Update("nickname", nickname).Error
+}
+
+func UpdateLastLoginAtByID(db *gorm.DB, id int64, lastLoginAt time.Time) error {
+	return db.Where("id = ?", id).Model(&model.User{}).Update("last_login_at", lastLoginAt).Error
 }

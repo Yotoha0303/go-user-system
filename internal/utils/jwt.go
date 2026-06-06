@@ -3,7 +3,6 @@ package utils
 import (
 	"errors"
 	"go-user-system/config"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -29,8 +28,6 @@ const InitIssuer = "go-user-system"
 func InitJWTKey(cfg *config.Config) error {
 
 	key := strings.TrimSpace(os.Getenv("JWT_SECRET"))
-
-	log.Printf("key: %v", key)
 
 	if key == "" {
 		return ErrJWTSecretNotFound

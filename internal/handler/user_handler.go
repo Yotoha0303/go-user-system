@@ -76,10 +76,11 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 	response.Success(c, response.TokenAndUserInfoResponse{
 		AccessToken: token,
 		User: response.UserInfoResponse{
-			ID:       user.ID,
-			Username: user.Username,
-			Nickname: user.Nickname,
-			Status:   user.Status,
+			ID:          user.ID,
+			Username:    user.Username,
+			Nickname:    user.Nickname,
+			Status:      user.Status,
+			LastLoginAt: user.LastLoginAt,
 		},
 	})
 }
@@ -122,10 +123,11 @@ func (h *UserHandler) MeHandler(c *gin.Context) {
 	}
 
 	response.Success(c, response.UserInfoResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Nickname: user.Nickname,
-		Status:   user.Status,
+		ID:          user.ID,
+		Username:    user.Username,
+		Nickname:    user.Nickname,
+		Status:      user.Status,
+		LastLoginAt: user.LastLoginAt,
 	})
 }
 

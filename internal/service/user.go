@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/dao"
@@ -115,6 +116,17 @@ func (s *UserService) Login(req request.LoginRequest) (*model.User, error) {
 		return nil, ErrInvalidCredentials
 	}
 
+	lastLoginAt := time.Now()
+	if err := dao.UpdateLastLoginAtByID(s.db, user.ID, lastLoginAt); err != nil {
+		return nil, apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeLoginFailed,
+			"登录错误",
+			err,
+		)
+	}
+	user.LastLoginAt = &lastLoginAt
+
 	return user, nil
 }
 
@@ -177,6 +189,10 @@ func (s *UserService) UpdateNickname(userID int64, nickname string) error {
 			"更改昵称失败",
 			err,
 		)
+	}
+
+	if user.Nickname == nickname {
+		return nil
 	}
 
 	if user.Status != model.UserStatusActive {

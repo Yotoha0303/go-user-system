@@ -223,6 +223,8 @@ curl http://127.0.0.1:8082/readyz
 | --- | --- |
 | `migrations/001_create_users.up.sql` | 创建 `users` 表 |
 | `migrations/001_create_users.down.sql` | 删除 `users` 表 |
+| `migrations/002_add_user_audit_fields.up.sql` | 增加 `last_login_at`、`deleted_at` 审计字段 |
+| `migrations/002_add_user_audit_fields.down.sql` | 回滚用户审计字段 |
 
 迁移执行规则：
 
@@ -252,6 +254,20 @@ cat migrations/001_create_users.up.sql
 migrations/002_your_change.up.sql
 migrations/002_your_change.down.sql
 ```
+
+当前用户模型字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 用户主键 |
+| `username` | 登录用户名，唯一索引 |
+| `password_hash` | bcrypt 密码哈希，不对外返回 |
+| `nickname` | 用户昵称 |
+| `status` | 用户状态，`1` 正常，`2` 禁用 |
+| `created_at` | 创建时间 |
+| `updated_at` | 更新时间 |
+| `last_login_at` | 最近一次登录时间 |
+| `deleted_at` | 软删除时间，配合 GORM 软删除 |
 
 ## 9. 工程化命令
 

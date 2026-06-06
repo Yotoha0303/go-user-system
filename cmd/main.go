@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 	"go-user-system/config"
-	"go-user-system/database"
 	"go-user-system/internal/utils"
+	"go-user-system/pkg/database"
+	"go-user-system/pkg/migration"
 	"go-user-system/router"
 	"log"
 )
@@ -27,7 +28,7 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	if err := database.RunMigrations(db, "migrations"); err != nil {
+	if err := migration.RunMigrations(db, "migrations"); err != nil {
 		log.Fatalf("run migrations failed: %v", err)
 	}
 
