@@ -1,13 +1,16 @@
 APP_NAME := go-user-system
 IMAGE_NAME := go-user-system:dev
 
-.PHONY: run test vet build clean tidy docker-build compose-up compose-down compose-logs ci
+.PHONY: run test integration-test vet build clean tidy docker-build compose-up compose-down compose-logs ci
 
 run:
 	go run ./cmd
 
 test:
 	go test ./...
+
+integration-test:
+	go test ./... -run Integration
 
 vet:
 	go vet ./...

@@ -2,9 +2,16 @@ package service
 
 import (
 	"errors"
+	"go-user-system/internal/dao"
+	"go-user-system/internal/model"
 	"go-user-system/internal/request"
+	"go-user-system/internal/testutil"
+	"go-user-system/pkg/migration"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func TestRegisterValidatesUsernameLength(t *testing.T) {
@@ -116,5 +123,148 @@ func TestUpdateNicknameRequiresDatabase(t *testing.T) {
 
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
 		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
+	}
+}
+
+func prepareUserServiceIntegrationDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	db := testutil.OpenMySQL(t)
+	testutil.ResetTables(t, db, "schema_migrations", "users")
+	if err := migration.RunMigrations(db, "migrations"); err != nil {
+		t.Fatalf("run migrations failed: %v", err)
+	}
+
+	t.Cleanup(func() {
+		testutil.ResetTables(t, db, "schema_migrations", "users")
+		testutil.CloseMySQL(t, db)
+	})
+
+	return db
+}
+
+func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
+	db := prepareUserServiceIntegrationDB(t)
+	userService := NewUserService(db)
+	username := testutil.UniqueName(t, "svc_user")
+	password := "password123"
+
+	err := userService.Register(request.RegisterRequest{
+		Username: "  " + username + "  ",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	storedUser, err := dao.GetUserByUsername(db, username)
+	if err != nil {
+		t.Fatalf("get registered user failed: %v", err)
+	}
+	if storedUser.PasswordHash == password {
+		t.Fatal("expected password to be stored as hash, got plain text")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(storedUser.PasswordHash), []byte(password)); err != nil {
+		t.Fatalf("stored password hash does not match password: %v", err)
+	}
+	if storedUser.Nickname != username {
+		t.Fatalf("expected nickname %s, got %s", username, storedUser.Nickname)
+	}
+	if storedUser.Status != model.UserStatusActive {
+		t.Fatalf("expected active status, got %d", storedUser.Status)
+	}
+
+	err = userService.Register(request.RegisterRequest{
+		Username: username,
+		Password: password,
+	})
+	if !errors.Is(err, ErrUsernameAlreadyExists) {
+		t.Fatalf("expected ErrUsernameAlreadyExists, got %v", err)
+	}
+
+	_, err = userService.Login(request.LoginRequest{
+		Username: username,
+		Password: "wrong-password",
+	})
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+	}
+
+	loggedInUser, err := userService.Login(request.LoginRequest{
+		Username: "  " + username + "  ",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if loggedInUser.LastLoginAt == nil || loggedInUser.LastLoginAt.IsZero() {
+		t.Fatal("expected login response to include last_login_at")
+	}
+
+	afterLoginUser, err := dao.GetUserByID(db, loggedInUser.ID)
+	if err != nil {
+		t.Fatalf("get user after login failed: %v", err)
+	}
+	if afterLoginUser.LastLoginAt == nil || afterLoginUser.LastLoginAt.IsZero() {
+		t.Fatal("expected last_login_at to be persisted")
+	}
+
+	profileUser, err := userService.GetProfile(loggedInUser.ID)
+	if err != nil {
+		t.Fatalf("get profile failed: %v", err)
+	}
+	if profileUser.Username != username {
+		t.Fatalf("expected profile username %s, got %s", username, profileUser.Username)
+	}
+
+	if err := userService.UpdateNickname(loggedInUser.ID, "  new-nickname  "); err != nil {
+		t.Fatalf("update nickname failed: %v", err)
+	}
+	updatedUser, err := dao.GetUserByID(db, loggedInUser.ID)
+	if err != nil {
+		t.Fatalf("get updated user failed: %v", err)
+	}
+	if updatedUser.Nickname != "new-nickname" {
+		t.Fatalf("expected nickname new-nickname, got %s", updatedUser.Nickname)
+	}
+}
+
+func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
+	db := prepareUserServiceIntegrationDB(t)
+	userService := NewUserService(db)
+	username := testutil.UniqueName(t, "disabled_user")
+	password := "password123"
+
+	hashBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("generate password hash failed: %v", err)
+	}
+
+	disabledUser := model.User{
+		Username:     username,
+		PasswordHash: string(hashBytes),
+		Nickname:     username,
+		Status:       model.UserStatusDisabled,
+	}
+	if err := dao.CreateUser(db, &disabledUser); err != nil {
+		t.Fatalf("create disabled user failed: %v", err)
+	}
+
+	_, err = userService.Login(request.LoginRequest{
+		Username: username,
+		Password: password,
+	})
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled on login, got %v", err)
+	}
+
+	_, err = userService.GetProfile(disabledUser.ID)
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled on profile, got %v", err)
+	}
+
+	err = userService.UpdateNickname(disabledUser.ID, "new-nickname")
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled on nickname update, got %v", err)
 	}
 }

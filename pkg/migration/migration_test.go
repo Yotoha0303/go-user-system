@@ -2,9 +2,12 @@ package migration
 
 import (
 	"errors"
+	"go-user-system/internal/testutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gorm.io/gorm"
 )
 
 func TestRunMigrationsRequiresDatabase(t *testing.T) {
@@ -96,5 +99,89 @@ func TestFindDirUpwardFindsParentMigrationDir(t *testing.T) {
 	}
 	if path != migrationDir {
 		t.Fatalf("expected path %s, got %s", migrationDir, path)
+	}
+}
+
+func prepareMigrationIntegrationDB(t *testing.T, tableNames ...string) *gorm.DB {
+	t.Helper()
+
+	db := testutil.OpenMySQL(t)
+	testutil.ResetTables(t, db, append([]string{"schema_migrations"}, tableNames...)...)
+
+	t.Cleanup(func() {
+		testutil.ResetTables(t, db, append([]string{"schema_migrations"}, tableNames...)...)
+		testutil.CloseMySQL(t, db)
+	})
+
+	return db
+}
+
+func writeMigrationFile(t *testing.T, dir string, name string, content string) {
+	t.Helper()
+
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatalf("write migration file %s failed: %v", name, err)
+	}
+}
+
+func TestRunMigrationsIntegrationCreatesSchemaTableAndSkipsAppliedVersions(t *testing.T) {
+	db := prepareMigrationIntegrationDB(t, "migration_items")
+	dir := t.TempDir()
+
+	writeMigrationFile(t, dir, "001_create_migration_items.up.sql", `
+CREATE TABLE migration_items (
+  id BIGINT NOT NULL PRIMARY KEY,
+  name VARCHAR(64) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO migration_items (id, name) VALUES (1, 'first');
+`)
+
+	if err := RunMigrations(db, dir); err != nil {
+		t.Fatalf("run migrations failed: %v", err)
+	}
+	if !db.Migrator().HasTable(schemaMigrationsTable) {
+		t.Fatal("expected schema_migrations table to be created")
+	}
+
+	var versionCount int64
+	if err := db.Raw("SELECT COUNT(1) FROM schema_migrations WHERE version = ?", "001_create_migration_items").Scan(&versionCount).Error; err != nil {
+		t.Fatalf("count migration version failed: %v", err)
+	}
+	if versionCount != 1 {
+		t.Fatalf("expected migration version to be recorded once, got %d", versionCount)
+	}
+
+	if err := RunMigrations(db, dir); err != nil {
+		t.Fatalf("run migrations second time failed: %v", err)
+	}
+
+	var itemCount int64
+	if err := db.Table("migration_items").Count(&itemCount).Error; err != nil {
+		t.Fatalf("count migration items failed: %v", err)
+	}
+	if itemCount != 1 {
+		t.Fatalf("expected idempotent migration item count 1, got %d", itemCount)
+	}
+}
+
+func TestRunMigrationsIntegrationDoesNotRecordFailedMigration(t *testing.T) {
+	db := prepareMigrationIntegrationDB(t)
+	dir := t.TempDir()
+
+	writeMigrationFile(t, dir, "001_bad.up.sql", `
+INSERT INTO missing_migration_table (id) VALUES (1);
+`)
+
+	err := RunMigrations(db, dir)
+	if err == nil {
+		t.Fatal("expected migration failure")
+	}
+
+	var versionCount int64
+	if err := db.Raw("SELECT COUNT(1) FROM schema_migrations WHERE version = ?", "001_bad").Scan(&versionCount).Error; err != nil {
+		t.Fatalf("count failed migration version failed: %v", err)
+	}
+	if versionCount != 0 {
+		t.Fatalf("expected failed migration not to be recorded, got %d", versionCount)
 	}
 }
