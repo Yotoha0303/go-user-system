@@ -1,12 +1,13 @@
 # 本地 Docker Compose 部署说明
 
-本文档说明如何使用 Docker Compose 在本地启动 `go-user-system` 和 MySQL。
+本文档说明如何在本地使用 Docker Compose 启动 `go-user-system` 和 MySQL。
 
 ## 1. 前置条件
 
 - 已安装 Docker Desktop，或 Docker Engine + Docker Compose
-- Docker 可以拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`
-- 已复制 `.env.example` 为 `.env`，并配置 `DB_PASSWORD`、`JWT_SECRET`
+- Docker 能拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`
+- 已复制 `.env.example` 为 `.env`
+- `.env` 中已设置 `DB_PASSWORD` 和 `JWT_SECRET`
 - 本地端口 `8082`、`3306` 未被占用
 
 ## 2. 启动服务
@@ -23,18 +24,23 @@ Windows PowerShell：
 Copy-Item .env.example .env
 ```
 
-`compose.yaml` 会使用 `.env` 中的 `DB_PASSWORD` 作为 MySQL root 密码和应用连接密码，并使用 `JWT_SECRET` 初始化 JWT 签名密钥。
+修改 `.env`：
 
-在项目根目录执行：
-
-```bash
-make compose-up
+```dotenv
+DB_PASSWORD=your_mysql_password
+JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 ```
 
-未安装 `make` 时执行：
+启动：
 
 ```bash
 docker compose up -d --build
+```
+
+或：
+
+```bash
+make compose-up
 ```
 
 该命令会：
@@ -42,10 +48,11 @@ docker compose up -d --build
 - 构建 Go 应用镜像
 - 启动 MySQL `8.4`
 - 创建数据库 `go_user_system`
-- 应用启动时自动执行 `migrations/*.up.sql`
-- 启动应用容器并监听 `8082`
+- 等待 MySQL healthcheck 通过
+- 启动应用容器
+- 应用启动时执行 `migrations/*.up.sql`
 
-## 3. 查看运行状态
+## 3. 查看状态
 
 ```bash
 docker compose ps
@@ -53,24 +60,17 @@ docker compose ps
 
 期望结果：
 
-- `go-user-system-mysql` 状态为 healthy
-- `go-user-system-app` 状态为 running 或 healthy
+- `go-user-system-mysql` 为 `healthy`
+- `go-user-system-app` 为 `running` 或 `healthy`
 
-查看应用日志：
-
-```bash
-make compose-logs
-```
-
-未安装 `make` 时执行：
+查看日志：
 
 ```bash
 docker compose logs -f app
+docker compose logs -f mysql
 ```
 
-## 4. 验证接口
-
-健康检查：
+## 4. 验证服务
 
 ```bash
 curl http://127.0.0.1:8082/ping
@@ -78,26 +78,14 @@ curl http://127.0.0.1:8082/livez
 curl http://127.0.0.1:8082/readyz
 ```
 
-期望返回：
-
-```json
-{
-  "code": 0,
-  "msg": "success",
-  "data": {
-    "message": "success"
-  }
-}
-```
+`/readyz` 返回 200 表示应用进程已启动，且数据库可连接。
 
 完整接口验证可使用：
 
 - `docs/http/test.http`
-- README 第 9 节手动测试流程
+- README 中的 API 概览
 
-## 5. 连接 MySQL
-
-Compose 中 MySQL 配置：
+## 5. MySQL 连接信息
 
 | 配置项 | 值 |
 | --- | --- |
@@ -109,46 +97,38 @@ Compose 中 MySQL 配置：
 
 应用容器内部访问 MySQL 时使用：
 
-```text
+```dotenv
 DB_HOST=mysql
 DB_PORT=3306
 ```
 
-原因是 Compose 会为服务创建内部 DNS，`mysql` 是数据库服务名。
+原因：Compose 会创建内部 DNS，`mysql` 是数据库服务名。
 
 ## 6. 停止服务
 
 停止并删除容器：
 
 ```bash
-make compose-down
-```
-
-未安装 `make` 时执行：
-
-```bash
 docker compose down
 ```
 
-默认不会删除 `mysql_data` 数据卷，因此数据库数据会保留。
-
-如果需要删除数据库数据：
+删除容器和 MySQL 数据卷：
 
 ```bash
 docker compose down -v
 ```
 
-注意：该命令会删除本地 MySQL 数据卷，执行前确认数据可以丢弃。
+注意：`docker compose down -v` 会删除本地 MySQL 数据卷，执行前确认数据可以丢弃。
 
 ## 7. 常见问题
 
 ### 端口被占用
 
-问题：`8082` 或 `3306` 已被本机其他进程占用。
+问题：`8082` 或 `3306` 已被其他进程占用。
 
 原因：Compose 需要把容器端口映射到宿主机端口。
 
-修改建议：停止占用端口的进程，或修改 `compose.yaml` 中的端口映射。
+修改建议：停止占用端口的进程，或修改 `compose.yaml` 端口映射。
 
 示例：
 
@@ -161,26 +141,23 @@ ports:
 
 问题：应用日志出现数据库连接失败。
 
-原因：常见原因包括 MySQL 尚未健康、数据库密码不一致、`DB_HOST` 配置错误。
+原因：常见原因包括 MySQL 尚未健康、`.env` 密码不一致、`DB_HOST` 配置错误。
 
-修改建议：优先检查 `docker compose ps`、`docker compose logs mysql`、`docker compose logs app` 和 `.env` 中的环境变量。
-
-示例：
+修改建议：依次检查服务状态、MySQL 日志、应用日志和 `.env`。
 
 ```bash
+docker compose ps
 docker compose logs mysql
 docker compose logs app
 ```
 
-### 修改代码后没有生效
+### 修改代码后容器行为没有变化
 
-问题：修改 Go 代码后容器行为没有变化。
+问题：修改 Go 代码后，容器行为没有更新。
 
 原因：应用镜像需要重新构建。
 
-修改建议：重新执行带 `--build` 的启动命令。
-
-示例：
+修改建议：
 
 ```bash
 docker compose up -d --build

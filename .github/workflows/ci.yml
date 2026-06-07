@@ -1,4 +1,4 @@
-name: Go CI
+name: CI
 
 on:
   push:
@@ -6,9 +6,19 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
+
 jobs:
-  test:
-    name: Run Go Tests
+  quality:
+    name: Test, Vet, Build
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +28,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version-file: go.mod
           cache: true
 
       - name: Download dependencies
@@ -31,7 +41,7 @@ jobs:
         run: go vet ./...
 
       - name: Build binary
-        run: go build -o go-user-system ./cmd
+        run: go build -o bin/go-user-system ./cmd
 
       - name: Build Docker image
         run: docker build -t go-user-system:ci .

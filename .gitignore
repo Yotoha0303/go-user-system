@@ -4,13 +4,14 @@
 
 config.local.yml
 
--p
-bin/
+bin/*
+!bin/.gitkeep
 dist/
 tmp/
 logs/
 *.log
 
 coverage.out
-.DS_Store
+coverage/
 coverage
+.DS_Store

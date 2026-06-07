@@ -25,4 +25,9 @@ USER app
 
 EXPOSE 8082
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8082/readyz || exit 1
+
+STOPSIGNAL SIGTERM
+
 CMD ["./go-user-system"]

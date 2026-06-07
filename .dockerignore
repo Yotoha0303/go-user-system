@@ -14,4 +14,6 @@ logs
 *.log
 
 coverage.out
+coverage
+coverage/
 .DS_Store
