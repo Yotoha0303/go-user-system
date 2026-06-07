@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/model"
 	"go-user-system/internal/request"
@@ -13,10 +14,10 @@ import (
 )
 
 type UserService interface {
-	Register(req request.RegisterRequest) error
-	Login(req request.LoginRequest) (*model.User, error)
-	GetProfile(userID int64) (*model.User, error)
-	UpdateNickname(userID int64, nickname string) error
+	Register(ctx context.Context, req request.RegisterRequest) error
+	Login(ctx context.Context, req request.LoginRequest) (*model.User, error)
+	GetProfile(ctx context.Context, userID int64) (*model.User, error)
+	UpdateNickname(ctx context.Context, userID int64, nickname string) error
 }
 
 type UserHandler struct {
@@ -36,7 +37,7 @@ func (h *UserHandler) RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.Register(req); err != nil {
+	if err := h.userService.Register(c.Request.Context(), req); err != nil {
 		handleError(c, err, response.CodeRegisterFailed, "注册失败")
 		return
 	}
@@ -51,7 +52,7 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.Login(req)
+	user, err := h.userService.Login(c.Request.Context(), req)
 	if err != nil {
 		handleError(c, err, response.CodeLoginFailed, "登录错误")
 		return
@@ -116,7 +117,7 @@ func (h *UserHandler) MeHandler(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.GetProfile(userID)
+	user, err := h.userService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		handleError(c, err, response.CodeGetProfileFailed, "获取用户信息失败")
 		return
@@ -168,7 +169,7 @@ func (h *UserHandler) UpdateProfileHandler(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.UpdateNickname(userID, req.Nickname); err != nil {
+	if err := h.userService.UpdateNickname(c.Request.Context(), userID, req.Nickname); err != nil {
 		handleError(c, err, response.CodeUpdateNicknameFailed, "更改昵称失败")
 		return
 	}

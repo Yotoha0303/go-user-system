@@ -1,30 +1,38 @@
 package dao
 
 import (
+	"context"
 	"go-user-system/internal/model"
 	"time"
 
 	"gorm.io/gorm"
 )
 
-func CreateUser(db *gorm.DB, user *model.User) error {
-	return db.Create(user).Error
+func CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
+	return withContext(ctx, db).Create(user).Error
 }
 
-func GetUserByUsername(db *gorm.DB, username string) (*model.User, error) {
+func GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*model.User, error) {
 	var user model.User
-	return &user, db.Where("username =?", username).First(&user).Error
+	return &user, withContext(ctx, db).Where("username =?", username).First(&user).Error
 }
 
-func GetUserByID(db *gorm.DB, id int64) (*model.User, error) {
+func GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
 	var user model.User
-	return &user, db.Where("id = ?", id).First(&user).Error
+	return &user, withContext(ctx, db).Where("id = ?", id).First(&user).Error
 }
 
-func UpdateNicknameByID(db *gorm.DB, id int64, nickname string) error {
-	return db.Where("id = ?", id).Model(&model.User{}).Update("nickname", nickname).Error
+func UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error {
+	return withContext(ctx, db).Where("id = ?", id).Model(&model.User{}).Update("nickname", nickname).Error
 }
 
-func UpdateLastLoginAtByID(db *gorm.DB, id int64, lastLoginAt time.Time) error {
-	return db.Where("id = ?", id).Model(&model.User{}).Update("last_login_at", lastLoginAt).Error
+func UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error {
+	return withContext(ctx, db).Where("id = ?", id).Model(&model.User{}).Update("last_login_at", lastLoginAt).Error
+}
+
+func withContext(ctx context.Context, db *gorm.DB) *gorm.DB {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return db.WithContext(ctx)
 }

@@ -15,6 +15,7 @@
 
 - **配置**：`config.yml` 保存非敏感默认配置，`.env` 注入敏感配置，`.env.example` 提供模板。
 - **依赖注入**：`*gorm.DB` 从 `cmd/main.go` 显式传入 router、service、handler，不再使用全局 DB。
+- **上下文传递**：HTTP request context 从 handler 传入 service 和 dao，GORM 查询使用 `WithContext`。
 - **数据库迁移**：启动时自动执行 `migrations/*.up.sql`，执行记录保存在 `schema_migrations`。
 - **测试**：包含单元测试、Handler 测试、JWT/中间件测试、DAO/Service/MySQL 集成测试、migration 幂等测试。
 - **部署**：提供 `Dockerfile`、`compose.yaml`、容器健康检查、非 root 用户运行、SIGTERM 优雅停止。

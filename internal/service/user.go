@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -31,7 +32,7 @@ func (s *UserService) ensureDB() error {
 	return nil
 }
 
-func (s *UserService) Register(req request.RegisterRequest) error {
+func (s *UserService) Register(ctx context.Context, req request.RegisterRequest) error {
 
 	username := strings.TrimSpace(req.Username)
 
@@ -47,7 +48,7 @@ func (s *UserService) Register(req request.RegisterRequest) error {
 		return err
 	}
 
-	userInfo, err := dao.GetUserByUsername(s.db, username)
+	userInfo, err := dao.GetUserByUsername(ctx, s.db, username)
 	if err == nil && userInfo != nil {
 		return ErrUsernameAlreadyExists
 	}
@@ -76,7 +77,7 @@ func (s *UserService) Register(req request.RegisterRequest) error {
 		Status:       model.UserStatusActive,
 	}
 
-	if err := dao.CreateUser(s.db, &user); err != nil {
+	if err := dao.CreateUser(ctx, s.db, &user); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeRegisterFailed,
@@ -87,14 +88,14 @@ func (s *UserService) Register(req request.RegisterRequest) error {
 	return nil
 }
 
-func (s *UserService) Login(req request.LoginRequest) (*model.User, error) {
+func (s *UserService) Login(ctx context.Context, req request.LoginRequest) (*model.User, error) {
 	username := strings.TrimSpace(req.Username)
 
 	if err := s.ensureDB(); err != nil {
 		return nil, err
 	}
 
-	user, err := dao.GetUserByUsername(s.db, username)
+	user, err := dao.GetUserByUsername(ctx, s.db, username)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -117,7 +118,7 @@ func (s *UserService) Login(req request.LoginRequest) (*model.User, error) {
 	}
 
 	lastLoginAt := time.Now()
-	if err := dao.UpdateLastLoginAtByID(s.db, user.ID, lastLoginAt); err != nil {
+	if err := dao.UpdateLastLoginAtByID(ctx, s.db, user.ID, lastLoginAt); err != nil {
 		return nil, apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeLoginFailed,
@@ -130,7 +131,7 @@ func (s *UserService) Login(req request.LoginRequest) (*model.User, error) {
 	return user, nil
 }
 
-func (s *UserService) GetProfile(userID int64) (*model.User, error) {
+func (s *UserService) GetProfile(ctx context.Context, userID int64) (*model.User, error) {
 	if userID <= 0 {
 		return nil, ErrInvalidUserID
 	}
@@ -139,7 +140,7 @@ func (s *UserService) GetProfile(userID int64) (*model.User, error) {
 		return nil, err
 	}
 
-	user, err := dao.GetUserByID(s.db, userID)
+	user, err := dao.GetUserByID(ctx, s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -159,7 +160,7 @@ func (s *UserService) GetProfile(userID int64) (*model.User, error) {
 	return user, nil
 }
 
-func (s *UserService) UpdateNickname(userID int64, nickname string) error {
+func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname string) error {
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
@@ -178,7 +179,7 @@ func (s *UserService) UpdateNickname(userID int64, nickname string) error {
 		return err
 	}
 
-	user, err := dao.GetUserByID(s.db, userID)
+	user, err := dao.GetUserByID(ctx, s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrUserNotFound
@@ -199,7 +200,7 @@ func (s *UserService) UpdateNickname(userID int64, nickname string) error {
 		return ErrUserDisabled
 	}
 
-	if err := dao.UpdateNicknameByID(s.db, userID, nickname); err != nil {
+	if err := dao.UpdateNicknameByID(ctx, s.db, userID, nickname); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeUpdateNicknameFailed,

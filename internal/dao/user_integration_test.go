@@ -1,6 +1,7 @@
 package dao
 
 import (
+	"context"
 	"errors"
 	"go-user-system/internal/model"
 	"go-user-system/internal/testutil"
@@ -30,6 +31,7 @@ func prepareUserDAOIntegrationDB(t *testing.T) *gorm.DB {
 
 func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 	db := prepareUserDAOIntegrationDB(t)
+	ctx := context.Background()
 	username := testutil.UniqueName(t, "dao_user")
 
 	user := model.User{
@@ -38,14 +40,14 @@ func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 		Nickname:     "alice",
 		Status:       model.UserStatusActive,
 	}
-	if err := CreateUser(db, &user); err != nil {
+	if err := CreateUser(ctx, db, &user); err != nil {
 		t.Fatalf("create user failed: %v", err)
 	}
 	if user.ID == 0 {
 		t.Fatal("expected created user id to be set")
 	}
 
-	byUsername, err := GetUserByUsername(db, username)
+	byUsername, err := GetUserByUsername(ctx, db, username)
 	if err != nil {
 		t.Fatalf("get user by username failed: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 		t.Fatalf("expected user id %d, got %d", user.ID, byUsername.ID)
 	}
 
-	byID, err := GetUserByID(db, user.ID)
+	byID, err := GetUserByID(ctx, db, user.ID)
 	if err != nil {
 		t.Fatalf("get user by id failed: %v", err)
 	}
@@ -61,10 +63,10 @@ func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 		t.Fatalf("expected username %s, got %s", username, byID.Username)
 	}
 
-	if err := UpdateNicknameByID(db, user.ID, "new-name"); err != nil {
+	if err := UpdateNicknameByID(ctx, db, user.ID, "new-name"); err != nil {
 		t.Fatalf("update nickname failed: %v", err)
 	}
-	updatedUser, err := GetUserByID(db, user.ID)
+	updatedUser, err := GetUserByID(ctx, db, user.ID)
 	if err != nil {
 		t.Fatalf("get updated user failed: %v", err)
 	}
@@ -73,10 +75,10 @@ func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 	}
 
 	lastLoginAt := time.Now().Truncate(time.Millisecond)
-	if err := UpdateLastLoginAtByID(db, user.ID, lastLoginAt); err != nil {
+	if err := UpdateLastLoginAtByID(ctx, db, user.ID, lastLoginAt); err != nil {
 		t.Fatalf("update last login at failed: %v", err)
 	}
-	loggedInUser, err := GetUserByID(db, user.ID)
+	loggedInUser, err := GetUserByID(ctx, db, user.ID)
 	if err != nil {
 		t.Fatalf("get logged in user failed: %v", err)
 	}
@@ -87,14 +89,26 @@ func TestUserDAOIntegrationCreateReadAndUpdateUser(t *testing.T) {
 
 func TestUserDAOIntegrationReturnsNotFoundForMissingUser(t *testing.T) {
 	db := prepareUserDAOIntegrationDB(t)
+	ctx := context.Background()
 
-	_, err := GetUserByUsername(db, testutil.UniqueName(t, "missing_user"))
+	_, err := GetUserByUsername(ctx, db, testutil.UniqueName(t, "missing_user"))
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound by username, got %v", err)
 	}
 
-	_, err = GetUserByID(db, 999999999)
+	_, err = GetUserByID(ctx, db, 999999999)
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("expected ErrRecordNotFound by id, got %v", err)
+	}
+}
+
+func TestUserDAOIntegrationHonorsCanceledContext(t *testing.T) {
+	db := prepareUserDAOIntegrationDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := GetUserByUsername(ctx, db, testutil.UniqueName(t, "canceled_user"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }

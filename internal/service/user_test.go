@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"go-user-system/internal/dao"
 	"go-user-system/internal/model"
@@ -17,7 +18,7 @@ import (
 func TestRegisterValidatesUsernameLength(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.Register(request.RegisterRequest{
+	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "ab",
 		Password: "123456",
 	})
@@ -30,7 +31,7 @@ func TestRegisterValidatesUsernameLength(t *testing.T) {
 func TestRegisterValidatesPasswordLength(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.Register(request.RegisterRequest{
+	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
 		Password: "12345",
 	})
@@ -43,7 +44,7 @@ func TestRegisterValidatesPasswordLength(t *testing.T) {
 func TestRegisterRequiresDatabase(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.Register(request.RegisterRequest{
+	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
 		Password: "123456",
 	})
@@ -56,7 +57,7 @@ func TestRegisterRequiresDatabase(t *testing.T) {
 func TestLoginRequiresDatabase(t *testing.T) {
 	userService := NewUserService(nil)
 
-	_, err := userService.Login(request.LoginRequest{
+	_, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "alice",
 		Password: "123456",
 	})
@@ -69,7 +70,7 @@ func TestLoginRequiresDatabase(t *testing.T) {
 func TestGetProfileValidatesUserID(t *testing.T) {
 	userService := NewUserService(nil)
 
-	_, err := userService.GetProfile(0)
+	_, err := userService.GetProfile(context.Background(), 0)
 
 	if !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
@@ -79,7 +80,7 @@ func TestGetProfileValidatesUserID(t *testing.T) {
 func TestGetProfileRequiresDatabase(t *testing.T) {
 	userService := NewUserService(nil)
 
-	_, err := userService.GetProfile(1)
+	_, err := userService.GetProfile(context.Background(), 1)
 
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
 		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
@@ -89,7 +90,7 @@ func TestGetProfileRequiresDatabase(t *testing.T) {
 func TestUpdateNicknameValidatesUserID(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.UpdateNickname(0, "alice")
+	err := userService.UpdateNickname(context.Background(), 0, "alice")
 
 	if !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
@@ -99,7 +100,7 @@ func TestUpdateNicknameValidatesUserID(t *testing.T) {
 func TestUpdateNicknameValidatesEmptyNickname(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.UpdateNickname(1, "   ")
+	err := userService.UpdateNickname(context.Background(), 1, "   ")
 
 	if !errors.Is(err, ErrNicknameEmpty) {
 		t.Fatalf("expected ErrNicknameEmpty, got %v", err)
@@ -109,7 +110,7 @@ func TestUpdateNicknameValidatesEmptyNickname(t *testing.T) {
 func TestUpdateNicknameValidatesNicknameLength(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.UpdateNickname(1, strings.Repeat("a", 65))
+	err := userService.UpdateNickname(context.Background(), 1, strings.Repeat("a", 65))
 
 	if !errors.Is(err, ErrNicknameTooLong) {
 		t.Fatalf("expected ErrNicknameTooLong, got %v", err)
@@ -119,7 +120,7 @@ func TestUpdateNicknameValidatesNicknameLength(t *testing.T) {
 func TestUpdateNicknameRequiresDatabase(t *testing.T) {
 	userService := NewUserService(nil)
 
-	err := userService.UpdateNickname(1, "alice")
+	err := userService.UpdateNickname(context.Background(), 1, "alice")
 
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
 		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
@@ -146,10 +147,11 @@ func prepareUserServiceIntegrationDB(t *testing.T) *gorm.DB {
 func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 	db := prepareUserServiceIntegrationDB(t)
 	userService := NewUserService(db)
+	ctx := context.Background()
 	username := testutil.UniqueName(t, "svc_user")
 	password := "password123"
 
-	err := userService.Register(request.RegisterRequest{
+	err := userService.Register(ctx, request.RegisterRequest{
 		Username: "  " + username + "  ",
 		Password: password,
 	})
@@ -157,7 +159,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatalf("register failed: %v", err)
 	}
 
-	storedUser, err := dao.GetUserByUsername(db, username)
+	storedUser, err := dao.GetUserByUsername(ctx, db, username)
 	if err != nil {
 		t.Fatalf("get registered user failed: %v", err)
 	}
@@ -174,7 +176,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatalf("expected active status, got %d", storedUser.Status)
 	}
 
-	err = userService.Register(request.RegisterRequest{
+	err = userService.Register(ctx, request.RegisterRequest{
 		Username: username,
 		Password: password,
 	})
@@ -182,7 +184,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatalf("expected ErrUsernameAlreadyExists, got %v", err)
 	}
 
-	_, err = userService.Login(request.LoginRequest{
+	_, err = userService.Login(ctx, request.LoginRequest{
 		Username: username,
 		Password: "wrong-password",
 	})
@@ -190,7 +192,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 	}
 
-	loggedInUser, err := userService.Login(request.LoginRequest{
+	loggedInUser, err := userService.Login(ctx, request.LoginRequest{
 		Username: "  " + username + "  ",
 		Password: password,
 	})
@@ -201,7 +203,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatal("expected login response to include last_login_at")
 	}
 
-	afterLoginUser, err := dao.GetUserByID(db, loggedInUser.ID)
+	afterLoginUser, err := dao.GetUserByID(ctx, db, loggedInUser.ID)
 	if err != nil {
 		t.Fatalf("get user after login failed: %v", err)
 	}
@@ -209,7 +211,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatal("expected last_login_at to be persisted")
 	}
 
-	profileUser, err := userService.GetProfile(loggedInUser.ID)
+	profileUser, err := userService.GetProfile(ctx, loggedInUser.ID)
 	if err != nil {
 		t.Fatalf("get profile failed: %v", err)
 	}
@@ -217,10 +219,10 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		t.Fatalf("expected profile username %s, got %s", username, profileUser.Username)
 	}
 
-	if err := userService.UpdateNickname(loggedInUser.ID, "  new-nickname  "); err != nil {
+	if err := userService.UpdateNickname(ctx, loggedInUser.ID, "  new-nickname  "); err != nil {
 		t.Fatalf("update nickname failed: %v", err)
 	}
-	updatedUser, err := dao.GetUserByID(db, loggedInUser.ID)
+	updatedUser, err := dao.GetUserByID(ctx, db, loggedInUser.ID)
 	if err != nil {
 		t.Fatalf("get updated user failed: %v", err)
 	}
@@ -232,6 +234,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
 	db := prepareUserServiceIntegrationDB(t)
 	userService := NewUserService(db)
+	ctx := context.Background()
 	username := testutil.UniqueName(t, "disabled_user")
 	password := "password123"
 
@@ -246,11 +249,11 @@ func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
 		Nickname:     username,
 		Status:       model.UserStatusDisabled,
 	}
-	if err := dao.CreateUser(db, &disabledUser); err != nil {
+	if err := dao.CreateUser(ctx, db, &disabledUser); err != nil {
 		t.Fatalf("create disabled user failed: %v", err)
 	}
 
-	_, err = userService.Login(request.LoginRequest{
+	_, err = userService.Login(ctx, request.LoginRequest{
 		Username: username,
 		Password: password,
 	})
@@ -258,12 +261,12 @@ func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
 		t.Fatalf("expected ErrUserDisabled on login, got %v", err)
 	}
 
-	_, err = userService.GetProfile(disabledUser.ID)
+	_, err = userService.GetProfile(ctx, disabledUser.ID)
 	if !errors.Is(err, ErrUserDisabled) {
 		t.Fatalf("expected ErrUserDisabled on profile, got %v", err)
 	}
 
-	err = userService.UpdateNickname(disabledUser.ID, "new-nickname")
+	err = userService.UpdateNickname(ctx, disabledUser.ID, "new-nickname")
 	if !errors.Is(err, ErrUserDisabled) {
 		t.Fatalf("expected ErrUserDisabled on nickname update, got %v", err)
 	}

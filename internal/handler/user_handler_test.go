@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"go-user-system/config"
 	"go-user-system/internal/model"
@@ -16,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type requestContextKey struct{}
+
 type fakeUserService struct {
 	registerErr error
 	loginUser   *model.User
@@ -28,23 +31,31 @@ type fakeUserService struct {
 	updateCalled   bool
 	updatedUserID  int64
 	updatedName    string
+	registerCtx    context.Context
+	loginCtx       context.Context
+	profileCtx     context.Context
+	updateCtx      context.Context
 }
 
-func (s *fakeUserService) Register(req request.RegisterRequest) error {
+func (s *fakeUserService) Register(ctx context.Context, req request.RegisterRequest) error {
 	s.registerCalled = true
+	s.registerCtx = ctx
 	return s.registerErr
 }
 
-func (s *fakeUserService) Login(req request.LoginRequest) (*model.User, error) {
+func (s *fakeUserService) Login(ctx context.Context, req request.LoginRequest) (*model.User, error) {
+	s.loginCtx = ctx
 	return s.loginUser, s.loginErr
 }
 
-func (s *fakeUserService) GetProfile(userID int64) (*model.User, error) {
+func (s *fakeUserService) GetProfile(ctx context.Context, userID int64) (*model.User, error) {
+	s.profileCtx = ctx
 	return s.profileUser, s.profileErr
 }
 
-func (s *fakeUserService) UpdateNickname(userID int64, nickname string) error {
+func (s *fakeUserService) UpdateNickname(ctx context.Context, userID int64, nickname string) error {
 	s.updateCalled = true
+	s.updateCtx = ctx
 	s.updatedUserID = userID
 	s.updatedName = nickname
 	return s.updateErr
@@ -59,6 +70,7 @@ func performJSONRequest(handlerFunc gin.HandlerFunc, method string, path string,
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	request = request.WithContext(context.WithValue(request.Context(), requestContextKey{}, "request-context"))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 
@@ -114,6 +126,9 @@ func TestRegisterHandlerReturnsSuccess(t *testing.T) {
 	}
 	if !fakeService.registerCalled {
 		t.Fatal("expected register service to be called")
+	}
+	if got := fakeService.registerCtx.Value(requestContextKey{}); got != "request-context" {
+		t.Fatalf("expected request context to be passed to service, got %v", got)
 	}
 }
 
@@ -195,6 +210,9 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 	if data["access_token"] == "" {
 		t.Fatal("expected access_token to be returned")
 	}
+	if got := fakeService.loginCtx.Value(requestContextKey{}); got != "request-context" {
+		t.Fatalf("expected request context to be passed to login service, got %v", got)
+	}
 }
 
 func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
@@ -242,6 +260,9 @@ func TestMeHandlerReturnsCurrentUser(t *testing.T) {
 	}
 	if body.Code != response.CodeSuccess {
 		t.Fatalf("expected code %d, got %d", response.CodeSuccess, body.Code)
+	}
+	if got := fakeService.profileCtx.Value(requestContextKey{}); got != "request-context" {
+		t.Fatalf("expected request context to be passed to profile service, got %v", got)
 	}
 }
 
@@ -313,6 +334,9 @@ func TestUpdateProfileHandlerCallsService(t *testing.T) {
 	}
 	if fakeService.updatedUserID != 7 || fakeService.updatedName != "new_name" {
 		t.Fatalf("unexpected update args: userID=%d nickname=%s", fakeService.updatedUserID, fakeService.updatedName)
+	}
+	if got := fakeService.updateCtx.Value(requestContextKey{}); got != "request-context" {
+		t.Fatalf("expected request context to be passed to update service, got %v", got)
 	}
 }
 
