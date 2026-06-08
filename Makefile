@@ -1,7 +1,31 @@
 APP_NAME := go-user-system
 IMAGE_NAME := go-user-system:dev
 
-.PHONY: run test coverage coverage-html integration-test race-test vet build build-windows build-linux clean tidy docker-build compose-up compose-down compose-logs ci
+.DEFAULT_GOAL := help
+
+.PHONY: help run test coverage coverage-html integration-test race-test vet build build-windows build-linux clean tidy docker-build compose-up compose-down compose-logs ci
+
+help:
+	@echo Usage: make target
+	@echo Targets:
+	@echo   help              Show this help message
+	@echo   run               Run the application locally
+	@echo   test              Run all tests
+	@echo   coverage          Run tests and print coverage summary
+	@echo   coverage-html     Generate HTML coverage report
+	@echo   integration-test  Run integration tests
+	@echo   race-test         Run tests with race detector
+	@echo   vet               Run go vet
+	@echo   build             Build local binary
+	@echo   build-windows     Build Windows binary
+	@echo   build-linux       Build Linux binary
+	@echo   clean             Remove build artifacts
+	@echo   tidy              Run go mod tidy
+	@echo   docker-build      Build Docker image
+	@echo   compose-up        Start Docker Compose stack
+	@echo   compose-down      Stop Docker Compose stack
+	@echo   compose-logs      Follow app logs
+	@echo   ci                Run test, vet, build and docker-build
 
 run:
 	go run ./cmd
