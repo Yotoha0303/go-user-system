@@ -2,40 +2,62 @@
 
 基于 Go + Gin + GORM + MySQL 的用户认证系统。项目重点不是堆功能，而是把一个后端服务做成可运行、可测试、可部署、可复盘的工程化样板。
 
+## 当前状态
+
+- 单元测试与核心业务测试已系统补齐。
+- 当前全量测试覆盖率：`96.2%`。
+- 核心业务包覆盖率基本达到 `100%`：`service`、`handler`、`middleware`、`dao`、`utils`、`response`、`router` 等。
+- 覆盖率流程与测试内容说明：`docs/testing/test-coverage.md`。
+- CI 已覆盖：依赖下载、测试、`go vet`、二进制构建、Docker 镜像构建。
+
 ## 功能范围
 
 - 用户注册、登录、当前用户查询、昵称修改
 - bcrypt 密码哈希存储，接口不返回 `password_hash`
 - JWT 签发、解析和鉴权中间件
-- 统一响应结构、业务错误码和应用错误封装
+- 统一响应结构、业务错误码、应用错误封装
 - `/ping`、`/livez`、`/readyz` 健康检查
 - SQL migration 替代 GORM `AutoMigrate`
+- MySQL 集成测试安全保护：测试库名称必须包含 `test`
+- Dockerfile、Docker Compose、本地部署与生产检查文档
 
-## 工程化基本盘
+## 技术栈
 
-- **配置**：`config.yml` 保存非敏感默认配置，`.env` 注入敏感配置，`.env.example` 提供模板。
-- **依赖注入**：`*gorm.DB` 从 `cmd/main.go` 显式传入 router、service、handler，不再使用全局 DB。
-- **上下文传递**：HTTP request context 从 handler 传入 service 和 dao，GORM 查询使用 `WithContext`。
-- **数据库迁移**：启动时自动执行 `migrations/*.up.sql`，执行记录保存在 `schema_migrations`。
-- **测试**：包含单元测试、Handler 测试、JWT/中间件测试、DAO/Service/MySQL 集成测试、migration 幂等测试。
-- **部署**：提供 `Dockerfile`、`compose.yaml`、容器健康检查、非 root 用户运行、SIGTERM 优雅停止。
-- **质量门禁**：提供 `Makefile`、GitHub Actions CI、`.editorconfig`、`.gitattributes`、`.dockerignore`。
+| 类型 | 技术 |
+| --- | --- |
+| Web 框架 | Gin |
+| ORM | GORM |
+| 数据库 | MySQL |
+| 认证 | JWT + bcrypt |
+| 配置 | `config.yml` + `.env` + 环境变量覆盖 |
+| 测试 | Go testing、httptest、fake SQL driver、MySQL integration test |
+| 部署 | Docker、Docker Compose |
+| CI | GitHub Actions |
+
+## 工程化设计
+
+- **依赖注入**：`*gorm.DB` 从 `cmd/main.go` 显式传入 router、handler、service，避免全局 DB。
+- **上下文传递**：HTTP request context 从 handler 传到 service 和 dao，DAO 使用 `WithContext`。
+- **错误处理**：用 `internal/apperror` 封装 HTTP 状态码、业务码、消息和底层 cause。
+- **数据库迁移**：启动时自动执行 `migrations/*.up.sql`，执行记录存入 `schema_migrations`。
+- **测试可测性**：对启动流程、token 解析、数据库打开、DAO adapter 等位置做可注入设计，方便覆盖失败分支。
+- **部署安全**：容器健康检查、非 root 用户运行、SIGTERM 优雅关闭。
 
 ## 项目结构
 
 ```text
-cmd/                    程序入口
+cmd/                    程序入口与启动流程
 config/                 配置加载：config.yml + 环境变量覆盖
 internal/
   apperror/             应用错误模型
-  dao/                  数据访问
+  dao/                  数据访问层
   handler/              HTTP Handler
   middleware/           JWT 鉴权中间件
   model/                GORM 模型
   request/              请求 DTO
-  response/             响应结构和业务错误码
+  response/             统一响应结构和业务错误码
   service/              业务逻辑
-  testutil/             集成测试工具
+  testutil/             MySQL 集成测试工具
   utils/                JWT 工具
 pkg/
   database/             MySQL / GORM 初始化
@@ -43,14 +65,15 @@ pkg/
 router/                 路由注册
 migrations/             数据库迁移脚本
 docs/
-  deploy/               部署说明和生产检查清单
-  http/                 REST Client 手动测试
+  deploy/               本地 Compose 与生产检查文档
+  http/                 REST Client 手动测试文件
   sql/                  本地 SQL 辅助脚本
+  testing/              测试覆盖率与测试流程
 ```
 
 ## 快速启动
 
-### Docker Compose 启动
+### Docker Compose
 
 ```bash
 cp .env.example .env
@@ -81,7 +104,7 @@ curl http://127.0.0.1:8082/livez
 curl http://127.0.0.1:8082/readyz
 ```
 
-更多 Compose 说明见 `docs/deploy/local-compose.md`。
+更多 Compose 说明：`docs/deploy/local-compose.md`。
 
 ### 本地 Go 启动
 
@@ -90,7 +113,7 @@ curl http://127.0.0.1:8082/readyz
 - 已安装 Go
 - 已启动 MySQL
 - 已创建数据库 `go_user_system`
-- 已配置 `.env`
+- 已从 `.env.example` 复制并配置 `.env`
 
 创建数据库：
 
@@ -105,6 +128,12 @@ CREATE DATABASE go_user_system
 ```bash
 go mod download
 go run ./cmd
+```
+
+或使用 Makefile：
+
+```bash
+make run
 ```
 
 ## 配置说明
@@ -175,23 +204,9 @@ migrations/003_your_change.up.sql
 migrations/003_your_change.down.sql
 ```
 
-## 用户模型
-
-| 字段 | 说明 |
-| --- | --- |
-| `id` | 用户主键 |
-| `username` | 登录用户名，唯一索引 |
-| `password_hash` | bcrypt 密码哈希，不对外返回 |
-| `nickname` | 用户昵称 |
-| `status` | 用户状态，`1` 正常，`2` 禁用 |
-| `created_at` | 创建时间 |
-| `updated_at` | 更新时间 |
-| `last_login_at` | 最近一次登录时间 |
-| `deleted_at` | GORM 软删除字段 |
-
 ## 测试与质量门禁
 
-默认测试不依赖外部服务：
+默认测试不依赖真实 MySQL：
 
 ```bash
 go test ./...
@@ -199,15 +214,35 @@ go vet ./...
 go build -o bin/go-user-system ./cmd
 ```
 
-或使用 Makefile：
+Makefile：
 
 ```bash
 make test
+make coverage
+make coverage-html
 make vet
 make build
 ```
 
-集成测试需要专用 MySQL 测试库，数据库名必须包含 `test`，避免误删开发或生产库：
+覆盖率命令：
+
+```bash
+go test ./... "-coverprofile=coverage.out" -covermode=atomic
+go tool cover "-func=coverage.out"
+go tool cover "-html=coverage.out" -o coverage.html
+```
+
+当前覆盖率：
+
+- 全量语句覆盖率：`96.2%`
+- 建议 CI 覆盖率门槛：`95%`
+- 不建议为了追求绝对 `100%` 强行构造不稳定的 runtime/数据库故障分支
+
+详细测试内容：`docs/testing/test-coverage.md`。
+
+## 集成测试
+
+集成测试需要专用 MySQL 测试库，数据库名必须包含 `test`，避免误删开发库或生产库。
 
 ```sql
 CREATE DATABASE go_user_system_test
@@ -219,10 +254,14 @@ PowerShell 示例：
 
 ```powershell
 $env:TEST_DATABASE_DSN="root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system_test?charset=utf8mb4&parseTime=True&loc=Local"
-go test ./... -run Integration -v
+go test ./internal/dao ./internal/service ./pkg/migration -run Integration -v
 ```
 
-CI 位于 `.github/workflows/ci.yml`，包含：
+## CI 流程
+
+CI 文件：`.github/workflows/ci.yml`
+
+流程：
 
 1. `go mod download`
 2. `go test ./...`
@@ -241,7 +280,14 @@ CI 位于 `.github/workflows/ci.yml`，包含：
 - 镜像以非 root 用户运行
 - SIGTERM 能触发服务优雅关闭
 
-完整清单见 `docs/deploy/production-checklist.md`。
+完整清单：`docs/deploy/production-checklist.md`。
+
+## 可写入简历的亮点
+
+- 实现 Go + Gin + GORM 的用户认证系统，包含 JWT 鉴权、bcrypt 密码哈希、统一错误码和健康检查。
+- 使用 SQL migration 管理数据库结构变更，替代 `AutoMigrate`，并通过 `schema_migrations` 保证幂等执行。
+- 构建完整测试体系，覆盖 service、handler、middleware、DAO、migration、启动流程等模块，全量覆盖率达到 `96.2%`。
+- 支持 Docker Compose 本地启动、GitHub Actions CI、容器健康检查和 SIGTERM 优雅关闭。
 
 ## 常见问题
 
@@ -253,7 +299,7 @@ CI 位于 `.github/workflows/ci.yml`，包含：
 go run ./cmd
 ```
 
-或确认 `.env` 位于项目根目录，且保存为 UTF-8 无 BOM。
+或确认 `.env` 位于项目根目录，且保存为 UTF-8。
 
 ### JWT 初始化失败
 
@@ -266,7 +312,7 @@ JWT_EXPIRE_HOURS=24
 
 `JWT_SECRET` 不能为空，长度不能少于 32 个字符。
 
-### Compose 中应用连不上数据库
+### Compose 中应用连接不上数据库
 
 容器内部使用 `DB_HOST=mysql`，本机直连使用 `DB_HOST=127.0.0.1`。优先检查：
 
