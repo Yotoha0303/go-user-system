@@ -34,8 +34,8 @@ test:
 	go test ./...
 
 coverage:
-	go test ./... "-coverprofile=coverage.out" -covermode=atomic
-	go tool cover "-func=coverage.out"
+	go test -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
 
 coverage-html: coverage
 	go tool cover "-html=coverage.out" -o coverage.html
@@ -62,7 +62,7 @@ build-linux:
 	go build -o bin/$(APP_NAME) ./cmd
 
 clean:
-	rm -rfv bin/*
+	rm -rf bin coverage.out coverage.html
 
 tidy:
 	go mod tidy
@@ -79,4 +79,8 @@ compose-down:
 compose-logs:
 	docker compose logs -f app
 
-ci: test vet build docker-build
+ci:
+	$(MAKE) test
+	$(MAKE) vet
+	$(MAKE) build
+	$(MAKE) docker-build
