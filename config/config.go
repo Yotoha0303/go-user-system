@@ -39,7 +39,11 @@ var (
 )
 
 func LoadEnv() {
-	if path, ok := findFileUpward(".env"); ok {
+	loadEnvFile(".env")
+}
+
+func loadEnvFile(name string) {
+	if path, ok := findFileUpward(name); ok {
 		_ = godotenv.Load(path)
 		return
 	}

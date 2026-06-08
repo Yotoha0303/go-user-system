@@ -18,11 +18,45 @@ import (
 )
 
 type UserService struct {
-	db *gorm.DB
+	db    *gorm.DB
+	store userStore
 }
 
 func NewUserService(db *gorm.DB) *UserService {
-	return &UserService{db: db}
+	return &UserService{
+		db:    db,
+		store: daoUserStore{},
+	}
+}
+
+type userStore interface {
+	CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error
+	GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*model.User, error)
+	GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error)
+	UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error
+	UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error
+}
+
+type daoUserStore struct{}
+
+func (daoUserStore) CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
+	return dao.CreateUser(ctx, db, user)
+}
+
+func (daoUserStore) GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*model.User, error) {
+	return dao.GetUserByUsername(ctx, db, username)
+}
+
+func (daoUserStore) GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
+	return dao.GetUserByID(ctx, db, id)
+}
+
+func (daoUserStore) UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error {
+	return dao.UpdateNicknameByID(ctx, db, id, nickname)
+}
+
+func (daoUserStore) UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error {
+	return dao.UpdateLastLoginAtByID(ctx, db, id, lastLoginAt)
 }
 
 func (s *UserService) ensureDB() error {
@@ -48,7 +82,7 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 		return err
 	}
 
-	userInfo, err := dao.GetUserByUsername(ctx, s.db, username)
+	userInfo, err := s.store.GetUserByUsername(ctx, s.db, username)
 	if err == nil && userInfo != nil {
 		return ErrUsernameAlreadyExists
 	}
@@ -77,7 +111,7 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 		Status:       model.UserStatusActive,
 	}
 
-	if err := dao.CreateUser(ctx, s.db, &user); err != nil {
+	if err := s.store.CreateUser(ctx, s.db, &user); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeRegisterFailed,
@@ -95,7 +129,7 @@ func (s *UserService) Login(ctx context.Context, req request.LoginRequest) (*mod
 		return nil, err
 	}
 
-	user, err := dao.GetUserByUsername(ctx, s.db, username)
+	user, err := s.store.GetUserByUsername(ctx, s.db, username)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -118,7 +152,7 @@ func (s *UserService) Login(ctx context.Context, req request.LoginRequest) (*mod
 	}
 
 	lastLoginAt := time.Now()
-	if err := dao.UpdateLastLoginAtByID(ctx, s.db, user.ID, lastLoginAt); err != nil {
+	if err := s.store.UpdateLastLoginAtByID(ctx, s.db, user.ID, lastLoginAt); err != nil {
 		return nil, apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeLoginFailed,
@@ -140,7 +174,7 @@ func (s *UserService) GetProfile(ctx context.Context, userID int64) (*model.User
 		return nil, err
 	}
 
-	user, err := dao.GetUserByID(ctx, s.db, userID)
+	user, err := s.store.GetUserByID(ctx, s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -179,7 +213,7 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 		return err
 	}
 
-	user, err := dao.GetUserByID(ctx, s.db, userID)
+	user, err := s.store.GetUserByID(ctx, s.db, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrUserNotFound
@@ -200,7 +234,7 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 		return ErrUserDisabled
 	}
 
-	if err := dao.UpdateNicknameByID(ctx, s.db, userID, nickname); err != nil {
+	if err := s.store.UpdateNicknameByID(ctx, s.db, userID, nickname); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeUpdateNicknameFailed,

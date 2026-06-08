@@ -1,13 +1,20 @@
 APP_NAME := go-user-system
 IMAGE_NAME := go-user-system:dev
 
-.PHONY: run test integration-test race-test vet build build-windows build-linux clean tidy docker-build compose-up compose-down compose-logs ci
+.PHONY: run test coverage coverage-html integration-test race-test vet build build-windows build-linux clean tidy docker-build compose-up compose-down compose-logs ci
 
 run:
 	go run ./cmd
 
 test:
 	go test ./...
+
+coverage:
+	go test ./... "-coverprofile=coverage.out" -covermode=atomic
+	go tool cover "-func=coverage.out"
+
+coverage-html: coverage
+	go tool cover "-html=coverage.out" -o coverage.html
 
 integration-test:
 	go test ./... -run Integration
@@ -31,7 +38,7 @@ build-linux:
 	go build -o bin/$(APP_NAME) ./cmd
 
 clean:
-	go clean
+	rm -rfv bin/*
 
 tidy:
 	go mod tidy

@@ -11,10 +11,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var parseToken = utils.ParseToken
+
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
-		if authHeader == "" {
+		authHeader := c.GetHeader("Authorization")
+		if strings.TrimSpace(authHeader) == "" {
 			response.Fail(c, http.StatusUnauthorized, response.CodeTokenMissing, "authorization header is empty")
 			c.Abort()
 			return
@@ -33,7 +35,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims, err := utils.ParseToken(tokenString)
+		claims, err := parseToken(tokenString)
 		if err != nil {
 			switch {
 			case errors.Is(err, jwt.ErrTokenMalformed):

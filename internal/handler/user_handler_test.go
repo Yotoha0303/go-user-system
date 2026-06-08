@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"go-user-system/config"
+	"go-user-system/internal/apperror"
 	"go-user-system/internal/model"
 	"go-user-system/internal/request"
 	"go-user-system/internal/response"
@@ -152,6 +154,53 @@ func TestRegisterHandlerMapsServiceError(t *testing.T) {
 	}
 }
 
+func TestRegisterHandlerMapsWrappedAppErrorWithCause(t *testing.T) {
+	fakeService := &fakeUserService{
+		registerErr: apperror.Wrap(
+			http.StatusInternalServerError,
+			response.CodeRegisterFailed,
+			"register failed",
+			errors.New("insert failed"),
+		),
+	}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.RegisterHandler,
+		http.MethodPost,
+		"/register",
+		`{"username":"alice","password":"123456"}`,
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+	if body.Code != response.CodeRegisterFailed {
+		t.Fatalf("expected code %d, got %d", response.CodeRegisterFailed, body.Code)
+	}
+}
+
+func TestRegisterHandlerMapsPlainErrorToFallback(t *testing.T) {
+	fakeService := &fakeUserService{registerErr: errors.New("plain failure")}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.RegisterHandler,
+		http.MethodPost,
+		"/register",
+		`{"username":"alice","password":"123456"}`,
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+	if body.Code != response.CodeRegisterFailed {
+		t.Fatalf("expected code %d, got %d", response.CodeRegisterFailed, body.Code)
+	}
+}
+
 func TestRegisterHandlerRejectsInvalidJSON(t *testing.T) {
 	fakeService := &fakeUserService{}
 	userHandler := NewUserHandler(fakeService)
@@ -172,6 +221,29 @@ func TestRegisterHandlerRejectsInvalidJSON(t *testing.T) {
 	}
 	if fakeService.registerCalled {
 		t.Fatal("expected register service not to be called")
+	}
+}
+
+func TestLoginHandlerRejectsInvalidJSON(t *testing.T) {
+	fakeService := &fakeUserService{}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.LoginHandler,
+		http.MethodPost,
+		"/login",
+		`{"username":"alice"`,
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+	if body.Code != response.CodeInvalidParams {
+		t.Fatalf("expected code %d, got %d", response.CodeInvalidParams, body.Code)
+	}
+	if fakeService.loginCtx != nil {
+		t.Fatal("expected login service not to be called")
 	}
 }
 
@@ -215,6 +287,36 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 	}
 }
 
+func TestLoginHandlerMapsTokenGenerationError(t *testing.T) {
+	fakeService := &fakeUserService{
+		loginUser: &model.User{
+			ID:       1,
+			Username: "alice",
+			Nickname: "alice",
+			Status:   model.UserStatusActive,
+		},
+	}
+	userHandler := NewUserHandler(fakeService)
+	userHandler.generateToken = func(userID int64, username string) (string, error) {
+		return "", errors.New("sign failed")
+	}
+
+	recorder := performJSONRequest(
+		userHandler.LoginHandler,
+		http.MethodPost,
+		"/login",
+		`{"username":"alice","password":"123456"}`,
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+	if body.Code != response.CodeTokenGenerateFailed {
+		t.Fatalf("expected code %d, got %d", response.CodeTokenGenerateFailed, body.Code)
+	}
+}
+
 func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
 	fakeService := &fakeUserService{loginErr: service.ErrInvalidCredentials}
 	userHandler := NewUserHandler(fakeService)
@@ -232,6 +334,27 @@ func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
 	}
 	if body.Code != response.CodeLoginFailed {
 		t.Fatalf("expected code %d, got %d", response.CodeLoginFailed, body.Code)
+	}
+}
+
+func TestMeHandlerMapsServiceError(t *testing.T) {
+	fakeService := &fakeUserService{profileErr: service.ErrUserNotFound}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.MeHandler,
+		http.MethodGet,
+		"/me",
+		"",
+		withUserID(1),
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
+	}
+	if body.Code != response.CodeUserNotFound {
+		t.Fatalf("expected code %d, got %d", response.CodeUserNotFound, body.Code)
 	}
 }
 
@@ -310,6 +433,56 @@ func TestMeHandlerRejectsInvalidUserIDType(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileHandlerRejectsMissingUserID(t *testing.T) {
+	fakeService := &fakeUserService{}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.UpdateProfileHandler,
+		http.MethodPut,
+		"/me/profile",
+		`{"nickname":"new_name"}`,
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+	if body.Code != response.CodeTokenUserMissing {
+		t.Fatalf("expected code %d, got %d", response.CodeTokenUserMissing, body.Code)
+	}
+	if fakeService.updateCalled {
+		t.Fatal("expected update service not to be called")
+	}
+}
+
+func TestUpdateProfileHandlerRejectsInvalidUserIDType(t *testing.T) {
+	fakeService := &fakeUserService{}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.UpdateProfileHandler,
+		http.MethodPut,
+		"/me/profile",
+		`{"nickname":"new_name"}`,
+		func(c *gin.Context) {
+			c.Set("user_id", "bad-user-id")
+			c.Next()
+		},
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Code)
+	}
+	if body.Code != response.CodeTokenUserInvalid {
+		t.Fatalf("expected code %d, got %d", response.CodeTokenUserInvalid, body.Code)
+	}
+	if fakeService.updateCalled {
+		t.Fatal("expected update service not to be called")
+	}
+}
+
 func TestUpdateProfileHandlerCallsService(t *testing.T) {
 	fakeService := &fakeUserService{}
 	userHandler := NewUserHandler(fakeService)
@@ -337,6 +510,27 @@ func TestUpdateProfileHandlerCallsService(t *testing.T) {
 	}
 	if got := fakeService.updateCtx.Value(requestContextKey{}); got != "request-context" {
 		t.Fatalf("expected request context to be passed to update service, got %v", got)
+	}
+}
+
+func TestUpdateProfileHandlerMapsServiceError(t *testing.T) {
+	fakeService := &fakeUserService{updateErr: service.ErrNicknameTooLong}
+	userHandler := NewUserHandler(fakeService)
+
+	recorder := performJSONRequest(
+		userHandler.UpdateProfileHandler,
+		http.MethodPut,
+		"/me/profile",
+		`{"nickname":"too-long"}`,
+		withUserID(7),
+	)
+
+	body := decodeResponse(t, recorder)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+	if body.Code != response.CodeNicknameInvalid {
+		t.Fatalf("expected code %d, got %d", response.CodeNicknameInvalid, body.Code)
 	}
 }
 

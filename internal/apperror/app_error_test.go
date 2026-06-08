@@ -17,6 +17,23 @@ func TestAppErrorUnwrapsCause(t *testing.T) {
 	}
 }
 
+func TestAppErrorUsesCauseMessageWhenMessageIsEmpty(t *testing.T) {
+	cause := errors.New("root cause")
+	err := Wrap(500, 1001, "", cause)
+
+	if err.Error() != "root cause" {
+		t.Fatalf("expected cause message root cause, got %s", err.Error())
+	}
+}
+
+func TestAppErrorUsesDefaultMessageWhenMessageAndCauseAreEmpty(t *testing.T) {
+	err := New(500, 1001, "")
+
+	if err.Error() != "application error" {
+		t.Fatalf("expected default message, got %s", err.Error())
+	}
+}
+
 func TestFromErrorFindsAppError(t *testing.T) {
 	appErr := New(400, 1001, "bad request")
 

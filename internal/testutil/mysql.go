@@ -17,6 +17,12 @@ import (
 const TestDatabaseDSNEnv = "TEST_DATABASE_DSN"
 const mysqlIntegrationLockName = "go_user_system_integration_tests"
 
+var openMySQLDB = func(dsn string) (*gorm.DB, error) {
+	return gorm.Open(mysql.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+}
+
 func OpenMySQL(t testing.TB) *gorm.DB {
 	t.Helper()
 
@@ -25,9 +31,7 @@ func OpenMySQL(t testing.TB) *gorm.DB {
 		t.Skipf("set %s to run MySQL integration tests", TestDatabaseDSNEnv)
 	}
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	db, err := openMySQLDB(dsn)
 	if err != nil {
 		t.Fatalf("open test mysql failed: %v", err)
 	}

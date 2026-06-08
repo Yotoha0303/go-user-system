@@ -2,18 +2,229 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"go-user-system/internal/apperror"
 	"go-user-system/internal/dao"
 	"go-user-system/internal/model"
 	"go-user-system/internal/request"
+	"go-user-system/internal/response"
 	"go-user-system/internal/testutil"
 	"go-user-system/pkg/migration"
+	"io"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+const serviceSQLDriverName = "go_user_system_service_test"
+
+var registerServiceSQLDriverOnce sync.Once
+
+type serviceSQLDriver struct{}
+
+func (serviceSQLDriver) Open(name string) (driver.Conn, error) {
+	return serviceSQLConn{}, nil
+}
+
+type serviceSQLConn struct{}
+
+func (serviceSQLConn) Prepare(query string) (driver.Stmt, error) {
+	return nil, errors.New("prepare is not supported")
+}
+
+func (serviceSQLConn) Close() error {
+	return nil
+}
+
+func (serviceSQLConn) Begin() (driver.Tx, error) {
+	return serviceSQLTx{}, nil
+}
+
+func (serviceSQLConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	return driver.RowsAffected(1), nil
+}
+
+func (serviceSQLConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	return serviceSQLRows{}, nil
+}
+
+type serviceSQLTx struct{}
+
+func (serviceSQLTx) Commit() error {
+	return nil
+}
+
+func (serviceSQLTx) Rollback() error {
+	return nil
+}
+
+type serviceSQLRows struct{}
+
+func (serviceSQLRows) Columns() []string {
+	return []string{"id", "username", "password_hash", "nickname", "status", "created_at", "updated_at", "last_login_at", "deleted_at"}
+}
+
+func (serviceSQLRows) Close() error {
+	return nil
+}
+
+func (serviceSQLRows) Next(dest []driver.Value) error {
+	return io.EOF
+}
+
+func openServiceDryRunDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	registerServiceSQLDriverOnce.Do(func() {
+		sql.Register(serviceSQLDriverName, serviceSQLDriver{})
+	})
+
+	sqlDB, err := sql.Open(serviceSQLDriverName, "service")
+	if err != nil {
+		t.Fatalf("open sql db failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Fatalf("close sql db failed: %v", err)
+		}
+	})
+
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		Conn:                      sqlDB,
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{DryRun: true})
+	if err != nil {
+		t.Fatalf("open dry run db failed: %v", err)
+	}
+	return db
+}
+
+type fakeUserStore struct {
+	userByUsername     *model.User
+	userByUsernameErr  error
+	userByID           *model.User
+	userByIDErr        error
+	createErr          error
+	updateNicknameErr  error
+	updateLastLoginErr error
+
+	createdUser      *model.User
+	updatedUserID    int64
+	updatedNickname  string
+	lastLoginUserID  int64
+	lastLoginAt      time.Time
+	createCalled     bool
+	updateCalled     bool
+	lastLoginCalled  bool
+	getUsernameInput string
+}
+
+func (s *fakeUserStore) CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
+	s.createCalled = true
+	s.createdUser = user
+	return s.createErr
+}
+
+func (s *fakeUserStore) GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*model.User, error) {
+	s.getUsernameInput = username
+	return s.userByUsername, s.userByUsernameErr
+}
+
+func (s *fakeUserStore) GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
+	return s.userByID, s.userByIDErr
+}
+
+func (s *fakeUserStore) UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error {
+	s.updateCalled = true
+	s.updatedUserID = id
+	s.updatedNickname = nickname
+	return s.updateNicknameErr
+}
+
+func (s *fakeUserStore) UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error {
+	s.lastLoginCalled = true
+	s.lastLoginUserID = id
+	s.lastLoginAt = lastLoginAt
+	return s.updateLastLoginErr
+}
+
+func newUnitUserService(store *fakeUserStore) *UserService {
+	return &UserService{
+		db:    &gorm.DB{},
+		store: store,
+	}
+}
+
+func assertServiceAppError(t *testing.T, err error, httpStatus int, code int) {
+	t.Helper()
+
+	appErr, ok := apperror.FromError(err)
+	if !ok {
+		t.Fatalf("expected AppError, got %T %v", err, err)
+	}
+	if appErr.HTTPStatus != httpStatus {
+		t.Fatalf("expected http status %d, got %d", httpStatus, appErr.HTTPStatus)
+	}
+	if appErr.Code != code {
+		t.Fatalf("expected code %d, got %d", code, appErr.Code)
+	}
+}
+
+func passwordHash(t *testing.T, password string) string {
+	t.Helper()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("generate password hash failed: %v", err)
+	}
+	return string(hash)
+}
+
+func TestEnsureDBRejectsNilService(t *testing.T) {
+	var userService *UserService
+
+	err := userService.ensureDB()
+
+	if !errors.Is(err, ErrDatabaseNotInitialized) {
+		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
+	}
+}
+
+func TestDaoUserStoreDelegatesToDAO(t *testing.T) {
+	store := daoUserStore{}
+	db := openServiceDryRunDB(t)
+	ctx := context.Background()
+	user := &model.User{
+		Username:     "alice",
+		PasswordHash: "hash",
+		Nickname:     "alice",
+		Status:       model.UserStatusActive,
+	}
+
+	if err := store.CreateUser(ctx, db, user); err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	if _, err := store.GetUserByUsername(ctx, db, "alice"); err != nil {
+		t.Fatalf("get user by username failed: %v", err)
+	}
+	if _, err := store.GetUserByID(ctx, db, 1); err != nil {
+		t.Fatalf("get user by id failed: %v", err)
+	}
+	if err := store.UpdateNicknameByID(ctx, db, 1, "new-name"); err != nil {
+		t.Fatalf("update nickname failed: %v", err)
+	}
+	if err := store.UpdateLastLoginAtByID(ctx, db, 1, time.Now()); err != nil {
+		t.Fatalf("update last login failed: %v", err)
+	}
+}
 
 func TestRegisterValidatesUsernameLength(t *testing.T) {
 	userService := NewUserService(nil)
@@ -124,6 +335,337 @@ func TestUpdateNicknameRequiresDatabase(t *testing.T) {
 
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
 		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
+	}
+}
+
+func TestRegisterCreatesActiveUserWithTrimmedUsernameAndHashedPassword(t *testing.T) {
+	store := &fakeUserStore{userByUsernameErr: gorm.ErrRecordNotFound}
+	userService := newUnitUserService(store)
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "  alice  ",
+		Password: "password123",
+	})
+
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	if store.getUsernameInput != "alice" {
+		t.Fatalf("expected trimmed username alice, got %s", store.getUsernameInput)
+	}
+	if !store.createCalled {
+		t.Fatal("expected CreateUser to be called")
+	}
+	if store.createdUser.Username != "alice" {
+		t.Fatalf("expected username alice, got %s", store.createdUser.Username)
+	}
+	if store.createdUser.Nickname != "alice" {
+		t.Fatalf("expected nickname alice, got %s", store.createdUser.Nickname)
+	}
+	if store.createdUser.Status != model.UserStatusActive {
+		t.Fatalf("expected active status, got %d", store.createdUser.Status)
+	}
+	if store.createdUser.PasswordHash == "password123" {
+		t.Fatal("expected password hash, got plain text")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(store.createdUser.PasswordHash), []byte("password123")); err != nil {
+		t.Fatalf("password hash does not match: %v", err)
+	}
+}
+
+func TestRegisterRejectsExistingUsername(t *testing.T) {
+	store := &fakeUserStore{userByUsername: &model.User{ID: 1, Username: "alice"}}
+	userService := newUnitUserService(store)
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	if !errors.Is(err, ErrUsernameAlreadyExists) {
+		t.Fatalf("expected ErrUsernameAlreadyExists, got %v", err)
+	}
+}
+
+func TestRegisterWrapsUsernameLookupError(t *testing.T) {
+	store := &fakeUserStore{userByUsernameErr: errors.New("lookup failed")}
+	userService := newUnitUserService(store)
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
+}
+
+func TestRegisterWrapsPasswordHashError(t *testing.T) {
+	store := &fakeUserStore{userByUsernameErr: gorm.ErrRecordNotFound}
+	userService := newUnitUserService(store)
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: strings.Repeat("a", 73),
+	})
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
+}
+
+func TestRegisterWrapsCreateUserError(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsernameErr: gorm.ErrRecordNotFound,
+		createErr:         errors.New("insert failed"),
+	}
+	userService := newUnitUserService(store)
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
+}
+
+func TestLoginMapsMissingUserToInvalidCredentials(t *testing.T) {
+	store := &fakeUserStore{userByUsernameErr: gorm.ErrRecordNotFound}
+	userService := newUnitUserService(store)
+
+	_, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func TestLoginWrapsUsernameLookupError(t *testing.T) {
+	store := &fakeUserStore{userByUsernameErr: errors.New("select failed")}
+	userService := newUnitUserService(store)
+
+	_, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeLoginFailed)
+}
+
+func TestLoginRejectsDisabledUser(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsername: &model.User{
+			ID:           1,
+			Username:     "alice",
+			PasswordHash: passwordHash(t, "password123"),
+			Status:       model.UserStatusDisabled,
+		},
+	}
+	userService := newUnitUserService(store)
+
+	_, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled, got %v", err)
+	}
+}
+
+func TestLoginRejectsWrongPassword(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsername: &model.User{
+			ID:           1,
+			Username:     "alice",
+			PasswordHash: passwordHash(t, "password123"),
+			Status:       model.UserStatusActive,
+		},
+	}
+	userService := newUnitUserService(store)
+
+	_, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "alice",
+		Password: "wrong-password",
+	})
+
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func TestLoginWrapsLastLoginUpdateError(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsername: &model.User{
+			ID:           1,
+			Username:     "alice",
+			PasswordHash: passwordHash(t, "password123"),
+			Status:       model.UserStatusActive,
+		},
+		updateLastLoginErr: errors.New("update failed"),
+	}
+	userService := newUnitUserService(store)
+
+	_, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeLoginFailed)
+}
+
+func TestLoginReturnsUserAndUpdatesLastLogin(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsername: &model.User{
+			ID:           1,
+			Username:     "alice",
+			PasswordHash: passwordHash(t, "password123"),
+			Status:       model.UserStatusActive,
+		},
+	}
+	userService := newUnitUserService(store)
+
+	user, err := userService.Login(context.Background(), request.LoginRequest{
+		Username: "  alice  ",
+		Password: "password123",
+	})
+
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if user.LastLoginAt == nil || user.LastLoginAt.IsZero() {
+		t.Fatal("expected LastLoginAt to be set")
+	}
+	if !store.lastLoginCalled {
+		t.Fatal("expected UpdateLastLoginAtByID to be called")
+	}
+	if store.lastLoginUserID != 1 {
+		t.Fatalf("expected last login user id 1, got %d", store.lastLoginUserID)
+	}
+	if store.lastLoginAt.IsZero() {
+		t.Fatal("expected stored last login timestamp")
+	}
+}
+
+func TestGetProfileMapsMissingUserToNotFound(t *testing.T) {
+	store := &fakeUserStore{userByIDErr: gorm.ErrRecordNotFound}
+	userService := newUnitUserService(store)
+
+	_, err := userService.GetProfile(context.Background(), 1)
+
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestGetProfileWrapsLookupError(t *testing.T) {
+	store := &fakeUserStore{userByIDErr: errors.New("select failed")}
+	userService := newUnitUserService(store)
+
+	_, err := userService.GetProfile(context.Background(), 1)
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeGetProfileFailed)
+}
+
+func TestGetProfileRejectsDisabledUser(t *testing.T) {
+	store := &fakeUserStore{userByID: &model.User{ID: 1, Status: model.UserStatusDisabled}}
+	userService := newUnitUserService(store)
+
+	_, err := userService.GetProfile(context.Background(), 1)
+
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled, got %v", err)
+	}
+}
+
+func TestGetProfileReturnsActiveUser(t *testing.T) {
+	store := &fakeUserStore{userByID: &model.User{ID: 1, Username: "alice", Status: model.UserStatusActive}}
+	userService := newUnitUserService(store)
+
+	user, err := userService.GetProfile(context.Background(), 1)
+
+	if err != nil {
+		t.Fatalf("get profile failed: %v", err)
+	}
+	if user.Username != "alice" {
+		t.Fatalf("expected username alice, got %s", user.Username)
+	}
+}
+
+func TestUpdateNicknameReturnsNilWhenNicknameIsUnchanged(t *testing.T) {
+	store := &fakeUserStore{userByID: &model.User{ID: 1, Nickname: "alice", Status: model.UserStatusActive}}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, " alice ")
+
+	if err != nil {
+		t.Fatalf("update nickname failed: %v", err)
+	}
+	if store.updateCalled {
+		t.Fatal("expected unchanged nickname not to call update")
+	}
+}
+
+func TestUpdateNicknameMapsMissingUserToNotFound(t *testing.T) {
+	store := &fakeUserStore{userByIDErr: gorm.ErrRecordNotFound}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, "new-name")
+
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestUpdateNicknameWrapsLookupError(t *testing.T) {
+	store := &fakeUserStore{userByIDErr: errors.New("select failed")}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, "new-name")
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeUpdateNicknameFailed)
+}
+
+func TestUpdateNicknameRejectsDisabledUser(t *testing.T) {
+	store := &fakeUserStore{userByID: &model.User{ID: 1, Nickname: "alice", Status: model.UserStatusDisabled}}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, "new-name")
+
+	if !errors.Is(err, ErrUserDisabled) {
+		t.Fatalf("expected ErrUserDisabled, got %v", err)
+	}
+}
+
+func TestUpdateNicknameWrapsUpdateError(t *testing.T) {
+	store := &fakeUserStore{
+		userByID:          &model.User{ID: 1, Nickname: "alice", Status: model.UserStatusActive},
+		updateNicknameErr: errors.New("update failed"),
+	}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, "new-name")
+
+	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeUpdateNicknameFailed)
+}
+
+func TestUpdateNicknameTrimsAndUpdatesNickname(t *testing.T) {
+	store := &fakeUserStore{userByID: &model.User{ID: 1, Nickname: "alice", Status: model.UserStatusActive}}
+	userService := newUnitUserService(store)
+
+	err := userService.UpdateNickname(context.Background(), 1, "  new-name  ")
+
+	if err != nil {
+		t.Fatalf("update nickname failed: %v", err)
+	}
+	if !store.updateCalled {
+		t.Fatal("expected UpdateNicknameByID to be called")
+	}
+	if store.updatedUserID != 1 {
+		t.Fatalf("expected user id 1, got %d", store.updatedUserID)
+	}
+	if store.updatedNickname != "new-name" {
+		t.Fatalf("expected trimmed nickname new-name, got %s", store.updatedNickname)
 	}
 }
 

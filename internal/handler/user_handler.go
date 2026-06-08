@@ -21,11 +21,15 @@ type UserService interface {
 }
 
 type UserHandler struct {
-	userService UserService
+	userService   UserService
+	generateToken func(userID int64, username string) (string, error)
 }
 
 func NewUserHandler(userService UserService) *UserHandler {
-	return &UserHandler{userService: userService}
+	return &UserHandler{
+		userService:   userService,
+		generateToken: utils.GenerateToken,
+	}
 }
 
 var _ UserService = (*service.UserService)(nil)
@@ -58,7 +62,7 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.GenerateToken(user.ID, user.Username)
+	token, err := h.generateToken(user.ID, user.Username)
 	if err != nil {
 		handleError(
 			c,

@@ -82,6 +82,10 @@ func ParseToken(tokenString string) (*UserClaims, error) {
 		return nil, err
 	}
 
+	return claimsFromToken(token)
+}
+
+func claimsFromToken(token *jwt.Token) (*UserClaims, error) {
 	claims, ok := token.Claims.(*UserClaims)
 	if !ok || !token.Valid {
 		return nil, ErrAccessTokenInvalid

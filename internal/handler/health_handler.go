@@ -34,6 +34,11 @@ func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 		return
 	}
 
+	if h.db.Config == nil {
+		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
+		return
+	}
+
 	sqlDB, err := h.db.DB()
 	if err != nil {
 		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")

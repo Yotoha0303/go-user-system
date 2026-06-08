@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -201,6 +202,10 @@ func TestLoadEnvFindsEnvFromParentDirectory(t *testing.T) {
 	}
 }
 
+func TestLoadEnvFileFallsBackWhenFileIsMissing(t *testing.T) {
+	loadEnvFile("definitely_missing_env_file_for_test")
+}
+
 func TestFindFileUpwardUsesSourceDirectoryWhenWorkingDirectoryIsOutsideProject(t *testing.T) {
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -223,5 +228,43 @@ func TestFindFileUpwardUsesSourceDirectoryWhenWorkingDirectoryIsOutsideProject(t
 
 	if filepath.Base(path) != "config.yml" {
 		t.Fatalf("expected config.yml, got %s", path)
+	}
+}
+
+func TestFindFileUpwardReturnsFalseForMissingRelativeFile(t *testing.T) {
+	_, ok := findFileUpward("definitely_missing_config_file_for_test.yml")
+
+	if ok {
+		t.Fatal("expected missing file not to be found")
+	}
+}
+
+func TestSearchStartDirsDeduplicatesWorkingDirectory(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("expected caller file")
+	}
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get wd failed: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Fatalf("restore wd failed: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(filepath.Dir(file)); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+
+	dirs := searchStartDirs()
+	seen := make(map[string]struct{})
+	for _, dir := range dirs {
+		if _, ok := seen[dir]; ok {
+			t.Fatalf("expected deduplicated dirs, got duplicate %s in %v", dir, dirs)
+		}
+		seen[dir] = struct{}{}
 	}
 }

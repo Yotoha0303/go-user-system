@@ -107,6 +107,54 @@ func TestAuthMiddlewareRejectsMalformedToken(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareRejectsInvalidSignature(t *testing.T) {
+	initJWTForMiddlewareTest(t, 24)
+
+	token, err := utils.GenerateToken(1, "alice")
+	if err != nil {
+		t.Fatalf("generate token failed: %v", err)
+	}
+
+	t.Setenv("JWT_SECRET", "middleware_test_other_secret_32_chars")
+	err = utils.InitJWTKey(&config.Config{
+		JWT: config.JWTConfig{ExpireHours: 24},
+	})
+	if err != nil {
+		t.Fatalf("reinit jwt key failed: %v", err)
+	}
+
+	recorder := performAuthRequest("Bearer " + token)
+	body := decodeAuthResponse(t, recorder)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, recorder.Code)
+	}
+	if body.Code != response.CodeTokenSignatureInvalid {
+		t.Fatalf("expected code %d, got %d", response.CodeTokenSignatureInvalid, body.Code)
+	}
+}
+
+func TestAuthMiddlewareRejectsGenericInvalidToken(t *testing.T) {
+	oldParseToken := parseToken
+	t.Cleanup(func() {
+		parseToken = oldParseToken
+	})
+
+	parseToken = func(tokenString string) (*utils.UserClaims, error) {
+		return nil, utils.ErrAccessTokenInvalid
+	}
+
+	recorder := performAuthRequest("Bearer invalid-token")
+	body := decodeAuthResponse(t, recorder)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, recorder.Code)
+	}
+	if body.Code != response.CodeTokenInvalid {
+		t.Fatalf("expected code %d, got %d", response.CodeTokenInvalid, body.Code)
+	}
+}
+
 func TestAuthMiddlewareAllowsValidToken(t *testing.T) {
 	initJWTForMiddlewareTest(t, 24)
 
