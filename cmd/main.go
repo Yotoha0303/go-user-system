@@ -7,15 +7,15 @@ import (
 	"go-user-system/config"
 	"go-user-system/internal/utils"
 	"go-user-system/pkg/database"
-	"go-user-system/pkg/migration"
 	"go-user-system/router"
-	"gorm.io/gorm"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type appServer interface {
@@ -28,7 +28,6 @@ type appDeps struct {
 	loadConfig      func(path string) (*config.Config, error)
 	initJWTKey      func(cfg *config.Config) error
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
-	runMigrations   func(db *gorm.DB, dir string) error
 	setupRouter     func(db *gorm.DB) http.Handler
 	newServer       func(addr string, handler http.Handler) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
@@ -37,11 +36,11 @@ type appDeps struct {
 
 func defaultAppDeps() appDeps {
 	return appDeps{
-		loadEnv:       config.LoadEnv,
-		loadConfig:    config.Load,
-		initJWTKey:    utils.InitJWTKey,
-		initDB:        database.InitDB,
-		runMigrations: migration.RunMigrations,
+		loadEnv:    config.LoadEnv,
+		loadConfig: config.Load,
+		initJWTKey: utils.InitJWTKey,
+		initDB:     database.InitDB,
+		// runMigrations: migration.RunMigrations,
 		setupRouter: func(db *gorm.DB) http.Handler {
 			return router.SetupRouter(db)
 		},
@@ -91,10 +90,6 @@ func run(deps appDeps) error {
 			log.Printf("close database failed: %v", err)
 		}
 	}()
-
-	if err := deps.runMigrations(db, "migrations"); err != nil {
-		return fmt.Errorf("run migrations failed: %w", err)
-	}
 
 	r := deps.setupRouter(db)
 

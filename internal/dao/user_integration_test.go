@@ -5,7 +5,6 @@ import (
 	"errors"
 	"go-user-system/internal/model"
 	"go-user-system/internal/testutil"
-	"go-user-system/pkg/migration"
 	"testing"
 	"time"
 
@@ -17,9 +16,6 @@ func prepareUserDAOIntegrationDB(t *testing.T) *gorm.DB {
 
 	db := testutil.OpenMySQL(t)
 	testutil.ResetTables(t, db, "schema_migrations", "users")
-	if err := migration.RunMigrations(db, "migrations"); err != nil {
-		t.Fatalf("run migrations failed: %v", err)
-	}
 
 	t.Cleanup(func() {
 		testutil.ResetTables(t, db, "schema_migrations", "users")

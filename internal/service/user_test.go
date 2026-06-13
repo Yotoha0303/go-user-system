@@ -11,7 +11,6 @@ import (
 	"go-user-system/internal/request"
 	"go-user-system/internal/response"
 	"go-user-system/internal/testutil"
-	"go-user-system/pkg/migration"
 	"io"
 	"net/http"
 	"strings"
@@ -674,9 +673,6 @@ func prepareUserServiceIntegrationDB(t *testing.T) *gorm.DB {
 
 	db := testutil.OpenMySQL(t)
 	testutil.ResetTables(t, db, "schema_migrations", "users")
-	if err := migration.RunMigrations(db, "migrations"); err != nil {
-		t.Fatalf("run migrations failed: %v", err)
-	}
 
 	t.Cleanup(func() {
 		testutil.ResetTables(t, db, "schema_migrations", "users")

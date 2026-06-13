@@ -35,22 +35,24 @@ JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 
 ```bash
 docker compose up -d --build
+make migrate-up
 ```
 
 或：
 
 ```bash
 make compose-up
+make migrate-up
 ```
 
-该命令会：
+以上命令会：
 
 - 构建 Go 应用镜像
 - 启动 MySQL `8.4`
 - 创建数据库 `go_user_system`
 - 等待 MySQL healthcheck 通过
 - 启动应用容器
-- 应用启动时执行 `migrations/*.up.sql`
+- 使用 goose 执行 `migrations/*.sql`
 
 ## 3. 查看状态
 

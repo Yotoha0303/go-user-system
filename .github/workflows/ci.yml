@@ -18,7 +18,7 @@ env:
 
 jobs:
   quality:
-    name: Test, Vet, Build
+    name: Test, Vet, Validate, Build
     runs-on: ubuntu-latest
 
     steps:
@@ -39,6 +39,12 @@ jobs:
 
       - name: Run vet
         run: go vet ./...
+
+      - name: Install goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      - name: Validate migrations
+        run: goose -dir migrations validate
 
       - name: Build binary
         run: go build -o bin/go-user-system ./cmd

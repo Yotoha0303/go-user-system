@@ -8,7 +8,7 @@
 - 当前全量测试覆盖率：`96.2%`。
 - 核心业务包覆盖率基本达到 `100%`：`service`、`handler`、`middleware`、`dao`、`utils`、`response`、`router` 等。
 - 覆盖率流程与测试内容说明：`docs/testing/test-coverage.md`。
-- CI 已覆盖：依赖下载、测试、`go vet`、二进制构建、Docker 镜像构建。
+- CI 已覆盖：依赖下载、测试、`go vet`、goose migration 校验、二进制构建、Docker 镜像构建。
 
 ## 功能范围
 
@@ -17,7 +17,7 @@
 - JWT 签发、解析和鉴权中间件
 - 统一响应结构、业务错误码、应用错误封装
 - `/ping`、`/livez`、`/readyz` 健康检查
-- SQL migration 替代 GORM `AutoMigrate`
+- Goose SQL migration 替代 GORM `AutoMigrate`
 - MySQL 集成测试安全保护：测试库名称必须包含 `test`
 - Dockerfile、Docker Compose、本地部署与生产检查文档
 
@@ -28,6 +28,7 @@
 | Web 框架 | Gin |
 | ORM | GORM |
 | 数据库 | MySQL |
+| 数据库迁移 | goose |
 | 认证 | JWT + bcrypt |
 | 配置 | `config.yml` + `.env` + 环境变量覆盖 |
 | 测试 | Go testing、httptest、fake SQL driver、MySQL integration test |
@@ -39,7 +40,7 @@
 - **依赖注入**：`*gorm.DB` 从 `cmd/main.go` 显式传入 router、handler、service，避免全局 DB。
 - **上下文传递**：HTTP request context 从 handler 传到 service 和 dao，DAO 使用 `WithContext`。
 - **错误处理**：用 `internal/apperror` 封装 HTTP 状态码、业务码、消息和底层 cause。
-- **数据库迁移**：启动时自动执行 `migrations/*.up.sql`，执行记录存入 `schema_migrations`。
+- **数据库迁移**：使用 goose 管理 `migrations/*.sql`，CI 校验迁移文件，执行记录存入 `goose_db_version`。
 - **测试可测性**：对启动流程、token 解析、数据库打开、DAO adapter 等位置做可注入设计，方便覆盖失败分支。
 - **部署安全**：容器健康检查、非 root 用户运行、SIGTERM 优雅关闭。
 
@@ -61,7 +62,6 @@ internal/
   utils/                JWT 工具
 pkg/
   database/             MySQL / GORM 初始化
-  migration/            SQL migration 执行器
 router/                 路由注册
 migrations/             数据库迁移脚本
 docs/
@@ -75,25 +75,41 @@ docs/
 
 ### Docker Compose
 
+首次启动前复制配置：
+
 ```bash
 cp .env.example .env
-docker compose up -d --build
-docker compose ps
+cp .env.goose.example .env.goose
 ```
 
 Windows PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d --build
-docker compose ps
+Copy-Item .env.goose.example .env.goose
 ```
 
-启动前必须修改 `.env`：
+修改 `.env`：
 
 ```dotenv
 DB_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+```
+
+修改 `.env.goose`，确保数据库密码与 `.env` 一致：
+
+```dotenv
+GOOSE_DRIVER=mysql
+GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
+GOOSE_MIGRATION_DIR=./migrations
+```
+
+启动服务并执行迁移：
+
+```bash
+docker compose up -d --build
+make migrate-up
+docker compose ps
 ```
 
 验证：
@@ -110,10 +126,12 @@ curl http://127.0.0.1:8082/readyz
 
 前置条件：
 
-- 已安装 Go
-- 已启动 MySQL
-- 已创建数据库 `go_user_system`
-- 已从 `.env.example` 复制并配置 `.env`
+- 安装 Go
+- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@latest`
+- 启动 MySQL
+- 创建数据库 `go_user_system`
+- 从 `.env.example` 复制并配置 `.env`
+- 从 `.env.goose.example` 复制并配置 `.env.goose`
 
 创建数据库：
 
@@ -127,12 +145,14 @@ CREATE DATABASE go_user_system
 
 ```bash
 go mod download
+make migrate-up
 go run ./cmd
 ```
 
 或使用 Makefile：
 
 ```bash
+make migrate-up
 make run
 ```
 
@@ -143,6 +163,8 @@ make run
 | `config.yml` | 非敏感默认配置 | 是 |
 | `.env.example` | 本地和 Compose 配置模板 | 是 |
 | `.env` | 本地真实配置 | 否 |
+| `.env.goose.example` | goose 本地迁移配置模板 | 是 |
+| `.env.goose` | goose 本地真实迁移配置 | 否 |
 | shell 环境变量 | CI、容器、服务器运行时注入 | 否 |
 
 配置加载规则：
@@ -164,6 +186,14 @@ JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_EXPIRE_HOURS=24
 ```
 
+goose 迁移配置：
+
+```dotenv
+GOOSE_DRIVER=mysql
+GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
+GOOSE_MIGRATION_DIR=./migrations
+```
+
 ## API 概览
 
 | 方法 | 路径 | 说明 | 鉴权 |
@@ -180,29 +210,37 @@ JWT_EXPIRE_HOURS=24
 
 ## 数据库迁移
 
-项目不使用 GORM `AutoMigrate`，启动时执行 `migrations/` 下尚未执行的 `.up.sql` 文件。
+项目不使用 GORM `AutoMigrate`，使用 goose 管理 `migrations/` 下的 SQL migration 文件。
+
+当前 migration 采用 goose 单文件格式：
+
+- 文件名使用顺序编号：`00001_create_users.sql`
+- 文件内使用 `-- +goose Up` 和 `-- +goose Down` 区分正向迁移与回滚
+- 执行记录由 goose 写入 `goose_db_version`
 
 | 文件 | 作用 |
 | --- | --- |
-| `migrations/001_create_users.up.sql` | 创建 `users` 表 |
-| `migrations/001_create_users.down.sql` | 删除 `users` 表 |
-| `migrations/002_add_user_audit_fields.up.sql` | 增加 `last_login_at`、`deleted_at` |
-| `migrations/002_add_user_audit_fields.down.sql` | 回滚用户审计字段 |
+| `migrations/00001_create_users.sql` | 创建 / 回滚 `users` 表 |
+| `migrations/00002_add_user_audit_fields.sql` | 增加 / 回滚 `last_login_at`、`deleted_at` |
 
-执行规则：
+常用命令：
 
-- 自动创建 `schema_migrations` 表
-- 只执行后缀为 `.up.sql` 的文件
-- 按文件名升序执行
-- 每个版本执行前检查是否已记录，已执行则跳过
-- 每个 migration 在事务中执行，失败不会记录版本
-
-新增表结构变更时，新增一组 migration 文件：
-
-```text
-migrations/003_your_change.up.sql
-migrations/003_your_change.down.sql
+```bash
+make goose-version
+make migrate-validate
+make migrate-status
+make migrate-version
+make migrate-up
+make migrate-down
 ```
+
+新增表结构变更时：
+
+```bash
+make migrate-create name=your_change
+```
+
+然后在生成的 SQL 文件中补充 `-- +goose Up` 和 `-- +goose Down` 对应 SQL。
 
 ## 测试与质量门禁
 
@@ -254,7 +292,7 @@ PowerShell 示例：
 
 ```powershell
 $env:TEST_DATABASE_DSN="root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system_test?charset=utf8mb4&parseTime=True&loc=Local"
-go test ./internal/dao ./internal/service ./pkg/migration -run Integration -v
+go test ./internal/dao ./internal/service -run Integration -v
 ```
 
 ## CI 流程
@@ -266,8 +304,10 @@ CI 文件：`.github/workflows/ci.yml`
 1. `go mod download`
 2. `go test ./...`
 3. `go vet ./...`
-4. `go build -o bin/go-user-system ./cmd`
-5. `docker build -t go-user-system:ci .`
+4. `go install github.com/pressly/goose/v3/cmd/goose@latest`
+5. `goose -dir migrations validate`
+6. `go build -o bin/go-user-system ./cmd`
+7. `docker build -t go-user-system:ci .`
 
 ## 部署检查
 
@@ -276,7 +316,7 @@ CI 文件：`.github/workflows/ci.yml`
 - `JWT_SECRET` 使用 32 位以上强随机字符串
 - 生产数据库不使用 MySQL `root` 用户连接业务库
 - `/readyz` 返回 200
-- migration 已执行，`schema_migrations` 中存在版本记录
+- migration 已执行，`goose_db_version` 中存在版本记录
 - 镜像以非 root 用户运行
 - SIGTERM 能触发服务优雅关闭
 
@@ -285,8 +325,8 @@ CI 文件：`.github/workflows/ci.yml`
 ## 可写入简历的亮点
 
 - 实现 Go + Gin + GORM 的用户认证系统，包含 JWT 鉴权、bcrypt 密码哈希、统一错误码和健康检查。
-- 使用 SQL migration 管理数据库结构变更，替代 `AutoMigrate`，并通过 `schema_migrations` 保证幂等执行。
-- 构建完整测试体系，覆盖 service、handler、middleware、DAO、migration、启动流程等模块，全量覆盖率达到 `96.2%`。
+- 使用 goose 管理数据库结构变更，替代 `AutoMigrate`，并通过版本表保证幂等执行。
+- 构建完整测试体系，覆盖 service、handler、middleware、DAO、启动流程等模块，全量覆盖率达到 `96.2%`。
 - 支持 Docker Compose 本地启动、GitHub Actions CI、容器健康检查和 SIGTERM 优雅关闭。
 
 ## 常见问题

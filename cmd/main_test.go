@@ -115,9 +115,6 @@ func baseRunDeps(t *testing.T) appDeps {
 		initDB: func(cfg *config.Config) (*gorm.DB, error) {
 			return openMainGormDB(t), nil
 		},
-		runMigrations: func(db *gorm.DB, dir string) error {
-			return nil
-		},
 		setupRouter: func(db *gorm.DB) http.Handler {
 			return http.NewServeMux()
 		},
@@ -134,9 +131,6 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 
 	if deps.loadEnv == nil || deps.loadConfig == nil || deps.initJWTKey == nil || deps.initDB == nil {
 		t.Fatal("expected default dependencies to be initialized")
-	}
-	if deps.runMigrations == nil || deps.setupRouter == nil || deps.newServer == nil || deps.notify == nil {
-		t.Fatal("expected default runtime dependencies to be initialized")
 	}
 	if deps.shutdownTimeout != 10*time.Second {
 		t.Fatalf("expected shutdown timeout 10s, got %s", deps.shutdownTimeout)
@@ -255,20 +249,6 @@ func TestRunReturnsDatabaseHandleError(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "get database handle failed") {
 		t.Fatalf("expected database handle error, got %v", err)
-	}
-}
-
-func TestRunReturnsMigrationError(t *testing.T) {
-	expectedErr := errors.New("migration failed")
-	deps := baseRunDeps(t)
-	deps.runMigrations = func(db *gorm.DB, dir string) error {
-		return expectedErr
-	}
-
-	err := run(deps)
-
-	if !errors.Is(err, expectedErr) {
-		t.Fatalf("expected migration error, got %v", err)
 	}
 }
 

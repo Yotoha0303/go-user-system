@@ -1,0 +1,19 @@
+-- +goose NO TRANSACTION
+
+-- +goose Up
+-- create users table
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    username VARCHAR(64) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    nickname VARCHAR(64) NOT NULL DEFAULT '',
+    status TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME(3) NULL DEFAULT NULL,
+    updated_at DATETIME(3) NULL DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY idx_username (username)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- +goose Down
+-- drop table users
+DROP TABLE IF EXISTS users;
