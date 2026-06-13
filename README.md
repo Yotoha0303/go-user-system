@@ -322,13 +322,6 @@ CI 文件：`.github/workflows/ci.yml`
 
 完整清单：`docs/deploy/production-checklist.md`。
 
-## 可写入简历的亮点
-
-- 实现 Go + Gin + GORM 的用户认证系统，包含 JWT 鉴权、bcrypt 密码哈希、统一错误码和健康检查。
-- 使用 goose 管理数据库结构变更，替代 `AutoMigrate`，并通过版本表保证幂等执行。
-- 构建完整测试体系，覆盖 service、handler、middleware、DAO、启动流程等模块，全量覆盖率达到 `96.2%`。
-- 支持 Docker Compose 本地启动、GitHub Actions CI、容器健康检查和 SIGTERM 优雅关闭。
-
 ## 常见问题
 
 ### 找不到 `.env`
