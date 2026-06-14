@@ -36,7 +36,45 @@ type JWTConfig struct {
 var (
 	ErrReadConfigFileFailed          = errors.New("read file failed")
 	ErrUnmarshalConfigFileDataFailed = errors.New("unmarshal config file data failed")
+	ErrInvalidServerPort             = errors.New("Invalid server port")
+	ErrInvalidExpireHours            = errors.New("Invalid expire hours")
+	ErrInvalidMySQLPort              = errors.New("invalid mysql port")
+	ErrMySQLDatabaseNotFound         = errors.New("MySQL database name not found")
+	ErrMySQLUserNotFound             = errors.New("MySQL user not found")
+	ErrMySQLHostNotFound             = errors.New("MySQL host not found")
 )
+
+func (c Config) Validate() error {
+	server := c.Server
+	mysql := c.MySQL
+	jwt := c.JWT
+
+	if server.Port <= 0 {
+		return ErrInvalidServerPort
+	}
+
+	if jwt.ExpireHours <= 0 {
+		return ErrInvalidExpireHours
+	}
+
+	if mysql.Host == "" {
+		return ErrMySQLHostNotFound
+	}
+
+	mysqlPort, err := strconv.Atoi(mysql.Port)
+	if err != nil || mysqlPort <= 0 || mysqlPort > 65535 {
+		return ErrInvalidMySQLPort
+	}
+
+	if mysql.Database == "" {
+		return ErrMySQLDatabaseNotFound
+	}
+
+	if mysql.User == "" {
+		return ErrMySQLUserNotFound
+	}
+	return nil
+}
 
 func LoadEnv() {
 	loadEnvFile(".env")
@@ -71,6 +109,10 @@ func Load(path string) (*Config, error) {
 	}
 
 	applyEnvOverrides(&cfg)
+
+	if err = cfg.Validate(); err != nil {
+		return nil, err
+	}
 
 	return &cfg, nil
 }

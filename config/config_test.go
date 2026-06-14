@@ -18,8 +18,23 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
-func TestLoadReadsConfigFile(t *testing.T) {
-	path := writeTempConfig(t, `
+func clearConfigEnv(t *testing.T) {
+	t.Helper()
+
+	for _, key := range []string{
+		"APP_PORT",
+		"DB_HOST",
+		"DB_PORT",
+		"DB_USER",
+		"DB_NAME",
+		"JWT_EXPIRE_HOURS",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
+func validConfigYAML() string {
+	return `
 server:
   port: 8082
 mysql:
@@ -29,7 +44,12 @@ mysql:
   database: go_user_system
 jwt:
   expireHours: 24
-`)
+`
+}
+
+func TestLoadReadsConfigFile(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeTempConfig(t, validConfigYAML())
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -47,25 +67,14 @@ jwt:
 	}
 }
 
-func TestLoadAppliesEnvOverrides(t *testing.T) {
+func TestLoadAppliesEnvOverridesBeforeValidation(t *testing.T) {
 	t.Setenv("APP_PORT", "9090")
 	t.Setenv("DB_HOST", "mysql")
 	t.Setenv("DB_PORT", "3307")
 	t.Setenv("DB_USER", "app_user")
 	t.Setenv("DB_NAME", "app_db")
 	t.Setenv("JWT_EXPIRE_HOURS", "12")
-
-	path := writeTempConfig(t, `
-server:
-  port: 8082
-mysql:
-  host: 127.0.0.1
-  port: "3306"
-  user: root
-  database: go_user_system
-jwt:
-  expireHours: 24
-`)
+	path := writeTempConfig(t, validConfigYAML())
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -92,6 +101,142 @@ jwt:
 	}
 }
 
+func TestLoadAllowsEnvOverridesToCompleteEmptyConfig(t *testing.T) {
+	t.Setenv("APP_PORT", "9090")
+	t.Setenv("DB_HOST", "mysql")
+	t.Setenv("DB_PORT", "3307")
+	t.Setenv("DB_USER", "app_user")
+	t.Setenv("DB_NAME", "app_db")
+	t.Setenv("JWT_EXPIRE_HOURS", "12")
+	path := writeTempConfig(t, ``)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+
+	if cfg.Server.Port != 9090 {
+		t.Fatalf("expected server port 9090, got %d", cfg.Server.Port)
+	}
+	if cfg.MySQL.Host != "mysql" {
+		t.Fatalf("expected mysql host mysql, got %s", cfg.MySQL.Host)
+	}
+}
+
+func validConfig() Config {
+	return Config{
+		Server: ServerConfig{Port: 8082},
+		MySQL: MySQLConfig{
+			Host:     "127.0.0.1",
+			Port:     "3306",
+			User:     "user",
+			Database: "go_user_system",
+		},
+		JWT: JWTConfig{ExpireHours: 24},
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutate    func(*Config)
+		expectErr error
+	}{
+		{
+			name:      "valid config",
+			mutate:    func(cfg *Config) {},
+			expectErr: nil,
+		},
+		{
+			name: "invalid server port",
+			mutate: func(cfg *Config) {
+				cfg.Server.Port = 0
+			},
+			expectErr: ErrInvalidServerPort,
+		},
+		{
+			name: "invalid jwt expire hours",
+			mutate: func(cfg *Config) {
+				cfg.JWT.ExpireHours = 0
+			},
+			expectErr: ErrInvalidExpireHours,
+		},
+		{
+			name: "missing mysql host",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Host = ""
+			},
+			expectErr: ErrMySQLHostNotFound,
+		},
+		{
+			name: "missing mysql port",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Port = ""
+			},
+			expectErr: ErrInvalidMySQLPort,
+		},
+		{
+			name: "non numeric mysql port",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Port = "not-a-port"
+			},
+			expectErr: ErrInvalidMySQLPort,
+		},
+		{
+			name: "mysql port too low",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Port = "0"
+			},
+			expectErr: ErrInvalidMySQLPort,
+		},
+		{
+			name: "mysql port too high",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Port = "65536"
+			},
+			expectErr: ErrInvalidMySQLPort,
+		},
+		{
+			name: "missing mysql database",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.Database = ""
+			},
+			expectErr: ErrMySQLDatabaseNotFound,
+		},
+		{
+			name: "missing mysql user",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.User = ""
+			},
+			expectErr: ErrMySQLUserNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			tt.mutate(&cfg)
+
+			err := cfg.Validate()
+
+			if !errors.Is(err, tt.expectErr) {
+				t.Fatalf("expected %v, got %v", tt.expectErr, err)
+			}
+		})
+	}
+}
+
+func TestLoadReturnsValidationError(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeTempConfig(t, ``)
+
+	_, err := Load(path)
+
+	if !errors.Is(err, ErrInvalidServerPort) {
+		t.Fatalf("expected ErrInvalidServerPort, got %v", err)
+	}
+}
+
 func TestLoadReturnsReadFileError(t *testing.T) {
 	_, err := Load(filepath.Join(t.TempDir(), "missing.yml"))
 
@@ -111,6 +256,7 @@ func TestLoadReturnsUnmarshalError(t *testing.T) {
 }
 
 func TestLoadFindsConfigFromParentDirectory(t *testing.T) {
+	clearConfigEnv(t)
 	root := t.TempDir()
 	child := filepath.Join(root, "cmd")
 	if err := os.Mkdir(child, 0o700); err != nil {
@@ -118,17 +264,7 @@ func TestLoadFindsConfigFromParentDirectory(t *testing.T) {
 	}
 
 	path := filepath.Join(root, "config.yml")
-	if err := os.WriteFile(path, []byte(`
-server:
-  port: 8082
-mysql:
-  host: 127.0.0.1
-  port: "3306"
-  user: root
-  database: go_user_system
-jwt:
-  expireHours: 24
-`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(validConfigYAML()), 0o600); err != nil {
 		t.Fatalf("write config failed: %v", err)
 	}
 

@@ -40,7 +40,6 @@ func defaultAppDeps() appDeps {
 		loadConfig: config.Load,
 		initJWTKey: utils.InitJWTKey,
 		initDB:     database.InitDB,
-		// runMigrations: migration.RunMigrations,
 		setupRouter: func(db *gorm.DB) http.Handler {
 			return router.SetupRouter(db)
 		},
