@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"go-user-system/config"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -115,7 +116,7 @@ func baseRunDeps(t *testing.T) appDeps {
 		initDB: func(cfg *config.Config) (*gorm.DB, error) {
 			return openMainGormDB(t), nil
 		},
-		setupRouter: func(db *gorm.DB) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger) http.Handler {
 			return http.NewServeMux()
 		},
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
@@ -135,7 +136,7 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.shutdownTimeout != 10*time.Second {
 		t.Fatalf("expected shutdown timeout 10s, got %s", deps.shutdownTimeout)
 	}
-	if deps.setupRouter(nil) == nil {
+	if deps.setupRouter(nil, nil) == nil {
 		t.Fatal("expected default router")
 	}
 	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {

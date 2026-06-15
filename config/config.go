@@ -29,6 +29,12 @@ type MySQLConfig struct {
 	Port     string `yaml:"port"`
 	User     string `yaml:"user"`
 	Database string `yaml:"database"`
+
+	MaxOpenConns    int           `yaml:"maxOpenConns"`
+	MaxIdleConns    int           `yaml:"maxIdleConns"`
+	ConnMaxLifetime time.Duration `yaml:"connMaxLifeTime"`
+	ConnMaxIdleTime time.Duration `yaml:"connMaxIdleTime"`
+	PingTimeout     time.Duration `yaml:"pingTimeout"`
 }
 
 type JWTConfig struct {
@@ -61,6 +67,11 @@ var (
 	ErrInvalidHttpServerIdleTimeout       = errors.New("Invalid server idle time out")
 	ErrInvalidHttpServerReadHeaderTimeout = errors.New("Invalid server read header time out")
 	ErrInvalidHttpServerMaxHeaderBytes    = errors.New("Invalid server max header bytes")
+	ErrMySQLMaxOpenConnsFailed            = errors.New("MySQL max open conns failed")
+	ErrMySQLMaxIdleConnsFailed            = errors.New("MySQL mysql max idle conns failed")
+	ErrMySQLInvalidConnMaxIdleTime        = errors.New("Invalid mysql conn max idle time")
+	ErrMySQLInvalidConnMaxLifetime        = errors.New("Invalid mysql conn max life time")
+	ErrMySQLInvalidPingTimeout            = errors.New("Invalid mysql conn ping time out")
 )
 
 func (c Config) Validate() error {
@@ -112,6 +123,26 @@ func (c Config) Validate() error {
 
 	if http.MaxHeaderBytesKib <= 0 {
 		return ErrInvalidHttpServerMaxHeaderBytes
+	}
+
+	if mysql.MaxOpenConns < 0 {
+		return ErrMySQLMaxOpenConnsFailed
+	}
+
+	if mysql.MaxIdleConns < 0 || mysql.MaxIdleConns > mysql.MaxOpenConns {
+		return ErrMySQLMaxIdleConnsFailed
+	}
+
+	if mysql.ConnMaxIdleTime <= 0 {
+		return ErrMySQLInvalidConnMaxIdleTime
+	}
+
+	if mysql.ConnMaxLifetime <= 0 {
+		return ErrMySQLInvalidConnMaxLifetime
+	}
+
+	if mysql.PingTimeout <= 0 {
+		return ErrMySQLInvalidPingTimeout
 	}
 
 	return nil

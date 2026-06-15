@@ -4,13 +4,18 @@ import (
 	"go-user-system/internal/handler"
 	"go-user-system/internal/middleware"
 	"go-user-system/internal/service"
+	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB) *gin.Engine {
-	r := gin.Default()
+func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
+	r := gin.New()
+
+	r.Use(gin.Recovery())
+	r.Use(middleware.RequestID())
+	r.Use(middleware.SlogMiddleware(logger))
 
 	userService := service.NewUserService(db)
 	userHandler := handler.NewUserHandler(userService)

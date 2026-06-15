@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"go-user-system/config"
 	"os"
@@ -9,8 +10,33 @@ import (
 	"gorm.io/gorm"
 )
 
-var openMySQL = func(dsn string) (*gorm.DB, error) {
-	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
+var openMySQL = func(cfg *config.Config, dsn string) (*gorm.DB, error) {
+	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("connect mysql failed: %w", err)
+	}
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, fmt.Errorf("get mysql db failed: %w", err)
+	}
+
+	sqlDB.SetMaxOpenConns(cfg.MySQL.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.MySQL.MaxIdleConns)
+	sqlDB.SetConnMaxIdleTime(cfg.MySQL.ConnMaxIdleTime)
+	sqlDB.SetConnMaxLifetime(cfg.MySQL.ConnMaxLifetime)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		cfg.MySQL.PingTimeout,
+	)
+	defer cancel()
+
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("ping mysql: %w", err)
+	}
+	return gormDB, nil
 }
 
 func buildDSN(cfg *config.Config, dbPassword string) (string, error) {
@@ -32,5 +58,5 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(dsn)
+	return openMySQL(cfg, dsn)
 }

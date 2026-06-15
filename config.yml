@@ -5,6 +5,11 @@ mysql:
   port: "3306"
   user: root
   database: go_user_system
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifeTime: 30m
+  connMaxIdleTime: 5m
+  pingTimeout: 3s
 jwt:
   expireHours: 24
 http:
@@ -13,4 +18,4 @@ http:
     writeTimeout: 10s
     idleTimeout: 60s
     readHeaderTimeout: 2s
-    MaxHeaderBytesKib: 512
+    maxHeaderBytesKib: 512

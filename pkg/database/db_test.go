@@ -5,6 +5,7 @@ import (
 	"go-user-system/config"
 	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -12,10 +13,15 @@ import (
 func validDBConfig() *config.Config {
 	return &config.Config{
 		MySQL: config.MySQLConfig{
-			Host:     "127.0.0.1",
-			Port:     "3306",
-			User:     "root",
-			Database: "go_user_system",
+			Host:            "127.0.0.1",
+			Port:            "3306",
+			User:            "root",
+			Database:        "go_user_system",
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: 30 * time.Minute,
+			ConnMaxIdleTime: 5 * time.Minute,
+			PingTimeout:     3 * time.Second,
 		},
 	}
 }
@@ -75,7 +81,7 @@ func TestInitDBUsesOpenMySQL(t *testing.T) {
 
 	var gotDSN string
 	expectedDB := &gorm.DB{}
-	openMySQL = func(dsn string) (*gorm.DB, error) {
+	openMySQL = func(cfg *config.Config, dsn string) (*gorm.DB, error) {
 		gotDSN = dsn
 		return expectedDB, nil
 	}
@@ -102,7 +108,7 @@ func TestInitDBReturnsOpenError(t *testing.T) {
 	})
 
 	openErr := errors.New("open failed")
-	openMySQL = func(dsn string) (*gorm.DB, error) {
+	openMySQL = func(cfg *config.Config, dsn string) (*gorm.DB, error) {
 		return nil, openErr
 	}
 
@@ -114,7 +120,7 @@ func TestInitDBReturnsOpenError(t *testing.T) {
 }
 
 func TestDefaultOpenMySQLReturnsConnectionError(t *testing.T) {
-	_, err := openMySQL("root:secret@tcp(127.0.0.1:1)/go_user_system?timeout=1ms")
+	_, err := openMySQL(&config.Config{}, "root:secret@tcp(127.0.0.1:1)/go_user_system?timeout=1ms")
 
 	if err == nil {
 		t.Fatal("expected connection error")

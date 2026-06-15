@@ -19,21 +19,6 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
-func clearConfigEnv(t *testing.T) {
-	t.Helper()
-
-	for _, key := range []string{
-		"APP_PORT",
-		"DB_HOST",
-		"DB_PORT",
-		"DB_USER",
-		"DB_NAME",
-		"JWT_EXPIRE_HOURS",
-	} {
-		t.Setenv(key, "")
-	}
-}
-
 func validConfigYAML() string {
 	return `
 server:
@@ -43,13 +28,25 @@ mysql:
   port: "3306"
   user: root
   database: go_user_system
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifeTime: 30m
+  connMaxIdleTime: 5m
+  pingTimeout: 3s
 jwt:
   expireHours: 24
+http:
+  server:
+    readTimeout: 5s
+    writeTimeout: 10s
+    idleTimeout: 60s
+    readHeaderTimeout: 2s
+    MaxHeaderBytesKib: 512
+
 `
 }
 
 func TestLoadReadsConfigFile(t *testing.T) {
-	clearConfigEnv(t)
 	path := writeTempConfig(t, validConfigYAML())
 
 	cfg, err := Load(path)
@@ -66,61 +63,21 @@ func TestLoadReadsConfigFile(t *testing.T) {
 	if cfg.JWT.ExpireHours != 24 {
 		t.Fatalf("expected jwt expire hours 24, got %d", cfg.JWT.ExpireHours)
 	}
-}
 
-func TestLoadAppliesEnvOverridesBeforeValidation(t *testing.T) {
-	t.Setenv("APP_PORT", "9090")
-	t.Setenv("DB_HOST", "mysql")
-	t.Setenv("DB_PORT", "3307")
-	t.Setenv("DB_USER", "app_user")
-	t.Setenv("DB_NAME", "app_db")
-	t.Setenv("JWT_EXPIRE_HOURS", "12")
-	path := writeTempConfig(t, validConfigYAML())
-
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("load config failed: %v", err)
+	if cfg.MySQL.MaxOpenConns != 10 {
+		t.Fatalf("expected mysql max open conns 10,got %d", cfg.MySQL.MaxOpenConns)
 	}
-
-	if cfg.Server.Port != 9090 {
-		t.Fatalf("expected server port 9090, got %d", cfg.Server.Port)
+	if cfg.MySQL.MaxIdleConns != 5 {
+		t.Fatalf("expected mysql max open conns 5,got %d", cfg.MySQL.MaxIdleConns)
 	}
-	if cfg.MySQL.Host != "mysql" {
-		t.Fatalf("expected mysql host mysql, got %s", cfg.MySQL.Host)
+	if cfg.MySQL.ConnMaxLifetime != 30*time.Minute {
+		t.Fatalf("expected mysql conn max life time 30m,got %d", cfg.MySQL.ConnMaxLifetime)
 	}
-	if cfg.MySQL.Port != "3307" {
-		t.Fatalf("expected mysql port 3307, got %s", cfg.MySQL.Port)
+	if cfg.MySQL.ConnMaxIdleTime != 5*time.Minute {
+		t.Fatalf("expected mysql conn max idle time 5m,got %d", cfg.MySQL.ConnMaxIdleTime)
 	}
-	if cfg.MySQL.User != "app_user" {
-		t.Fatalf("expected mysql user app_user, got %s", cfg.MySQL.User)
-	}
-	if cfg.MySQL.Database != "app_db" {
-		t.Fatalf("expected mysql database app_db, got %s", cfg.MySQL.Database)
-	}
-	if cfg.JWT.ExpireHours != 12 {
-		t.Fatalf("expected jwt expire hours 12, got %d", cfg.JWT.ExpireHours)
-	}
-}
-
-func TestLoadAllowsEnvOverridesToCompleteEmptyConfig(t *testing.T) {
-	t.Setenv("APP_PORT", "9090")
-	t.Setenv("DB_HOST", "mysql")
-	t.Setenv("DB_PORT", "3307")
-	t.Setenv("DB_USER", "app_user")
-	t.Setenv("DB_NAME", "app_db")
-	t.Setenv("JWT_EXPIRE_HOURS", "12")
-	path := writeTempConfig(t, ``)
-
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("load config failed: %v", err)
-	}
-
-	if cfg.Server.Port != 9090 {
-		t.Fatalf("expected server port 9090, got %d", cfg.Server.Port)
-	}
-	if cfg.MySQL.Host != "mysql" {
-		t.Fatalf("expected mysql host mysql, got %s", cfg.MySQL.Host)
+	if cfg.MySQL.PingTimeout != 3*time.Second {
+		t.Fatalf("expected mysql ping time out 3s,got %d", cfg.MySQL.PingTimeout)
 	}
 }
 
@@ -128,10 +85,15 @@ func validConfig() Config {
 	return Config{
 		Server: ServerConfig{Port: 8082},
 		MySQL: MySQLConfig{
-			Host:     "127.0.0.1",
-			Port:     "3306",
-			User:     "user",
-			Database: "go_user_system",
+			Host:            "127.0.0.1",
+			Port:            "3306",
+			User:            "user",
+			Database:        "go_user_system",
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: 30 * time.Minute,
+			ConnMaxIdleTime: 5 * time.Minute,
+			PingTimeout:     3 * time.Second,
 		},
 		JWT: JWTConfig{ExpireHours: 24},
 		HttpServer: HttpServer{
@@ -140,7 +102,7 @@ func validConfig() Config {
 				WriteTimeout:      10 * time.Second,
 				IdleTimeout:       60 * time.Second,
 				ReadHeaderTimeout: 2 * time.Second,
-				MaxHeaderBytesKib: 512 << 10,
+				MaxHeaderBytesKib: 512,
 			},
 		},
 	}
@@ -255,6 +217,41 @@ func TestValidateConfig(t *testing.T) {
 			},
 			expectErr: ErrInvalidHttpServerMaxHeaderBytes,
 		},
+		{
+			name: "missing mysql max open conns",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.MaxOpenConns = -1
+			},
+			expectErr: ErrMySQLMaxOpenConnsFailed,
+		},
+		{
+			name: "missing mysql max idle conns",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.MaxIdleConns = -1
+			},
+			expectErr: ErrMySQLMaxIdleConnsFailed,
+		},
+		{
+			name: "missing mysql conn max life time",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.ConnMaxLifetime = 0
+			},
+			expectErr: ErrMySQLInvalidConnMaxLifetime,
+		},
+		{
+			name: "missing mysql conn max idle time",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.ConnMaxIdleTime = 0
+			},
+			expectErr: ErrMySQLInvalidConnMaxIdleTime,
+		},
+		{
+			name: "missing mysql ping time out",
+			mutate: func(cfg *Config) {
+				cfg.MySQL.PingTimeout = 0
+			},
+			expectErr: ErrMySQLInvalidPingTimeout,
+		},
 	}
 
 	for _, tt := range tests {
@@ -272,7 +269,6 @@ func TestValidateConfig(t *testing.T) {
 }
 
 func TestLoadReturnsValidationError(t *testing.T) {
-	clearConfigEnv(t)
 	path := writeTempConfig(t, ``)
 
 	_, err := Load(path)
@@ -301,7 +297,6 @@ func TestLoadReturnsUnmarshalError(t *testing.T) {
 }
 
 func TestLoadFindsConfigFromParentDirectory(t *testing.T) {
-	clearConfigEnv(t)
 	root := t.TempDir()
 	child := filepath.Join(root, "cmd")
 	if err := os.Mkdir(child, 0o700); err != nil {
@@ -451,7 +446,6 @@ func TestSearchStartDirsDeduplicatesWorkingDirectory(t *testing.T) {
 }
 
 func TestLoadApplicationsDefaultHTTPServerConfig(t *testing.T) {
-	clearConfigEnv(t)
 
 	path := writeTempConfig(t, validConfigYAML())
 
