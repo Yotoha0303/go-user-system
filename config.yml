@@ -7,3 +7,10 @@ mysql:
   database: go_user_system
 jwt:
   expireHours: 24
+http:
+  server:
+    readTimeout: 5s
+    writeTimeout: 10s
+    idleTimeout: 60s
+    readHeaderTimeout: 2s
+    MaxHeaderBytesKib: 512

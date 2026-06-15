@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func writeTempConfig(t *testing.T, content string) string {
@@ -133,6 +134,15 @@ func validConfig() Config {
 			Database: "go_user_system",
 		},
 		JWT: JWTConfig{ExpireHours: 24},
+		HttpServer: HttpServer{
+			Server: HttpServerConfig{
+				ReadTimeOut:       5 * time.Second,
+				WriteTimeout:      10 * time.Second,
+				IdleTimeout:       60 * time.Second,
+				ReadHeaderTimeout: 2 * time.Second,
+				MaxHeaderBytesKib: 512 << 10,
+			},
+		},
 	}
 }
 
@@ -209,6 +219,41 @@ func TestValidateConfig(t *testing.T) {
 				cfg.MySQL.User = ""
 			},
 			expectErr: ErrMySQLUserNotFound,
+		},
+		{
+			name: "missing http server read time out",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.ReadTimeOut = 0
+			},
+			expectErr: ErrInvalidHttpServerReadTimeout,
+		},
+		{
+			name: "missing http server write time out",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.WriteTimeout = 0
+			},
+			expectErr: ErrInvalidHttpServerWriteTimeout,
+		},
+		{
+			name: "missing http server idle time out",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.IdleTimeout = 0
+			},
+			expectErr: ErrInvalidHttpServerIdleTimeout,
+		},
+		{
+			name: "missing http server read header time out",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.ReadHeaderTimeout = 0
+			},
+			expectErr: ErrInvalidHttpServerReadHeaderTimeout,
+		},
+		{
+			name: "missing http server max header bytes",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.MaxHeaderBytesKib = 0
+			},
+			expectErr: ErrInvalidHttpServerMaxHeaderBytes,
 		},
 	}
 
@@ -402,5 +447,25 @@ func TestSearchStartDirsDeduplicatesWorkingDirectory(t *testing.T) {
 			t.Fatalf("expected deduplicated dirs, got duplicate %s in %v", dir, dirs)
 		}
 		seen[dir] = struct{}{}
+	}
+}
+
+func TestLoadApplicationsDefaultHTTPServerConfig(t *testing.T) {
+	clearConfigEnv(t)
+
+	path := writeTempConfig(t, validConfigYAML())
+
+	cfg, err := Load(path)
+
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+
+	http := cfg.HttpServer.Server
+	if http.ReadTimeOut != 5*time.Second {
+		t.Fatalf("expected read timeout 5s, got %s", http.ReadTimeOut)
+	}
+	if http.WriteTimeout != 10*time.Second {
+		t.Fatalf("expected write timeout 10s, got %s", http.WriteTimeout)
 	}
 }

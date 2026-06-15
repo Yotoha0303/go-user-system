@@ -29,7 +29,7 @@ type appDeps struct {
 	initJWTKey      func(cfg *config.Config) error
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
 	setupRouter     func(db *gorm.DB) http.Handler
-	newServer       func(addr string, handler http.Handler) appServer
+	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
 	shutdownTimeout time.Duration
 }
@@ -43,10 +43,15 @@ func defaultAppDeps() appDeps {
 		setupRouter: func(db *gorm.DB) http.Handler {
 			return router.SetupRouter(db)
 		},
-		newServer: func(addr string, handler http.Handler) appServer {
+		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
-				Addr:    addr,
-				Handler: handler,
+				Addr:              addr,
+				Handler:           handler,
+				ReadTimeout:       cfg.ReadTimeOut,
+				WriteTimeout:      cfg.WriteTimeout,
+				IdleTimeout:       cfg.IdleTimeout,
+				ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+				MaxHeaderBytes:    cfg.MaxHeaderBytesKib << 10,
 			}
 		},
 		notify:          signal.Notify,
@@ -93,7 +98,12 @@ func run(deps appDeps) error {
 	r := deps.setupRouter(db)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	server := deps.newServer(addr, r)
+
+	server := deps.newServer(
+		addr,
+		r,
+		cfg.HttpServer.Server,
+	)
 
 	serverErr := make(chan error, 1)
 	go func() {

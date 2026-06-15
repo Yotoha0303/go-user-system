@@ -7,15 +7,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	MySQL  MySQLConfig  `yaml:"mysql"`
-	JWT    JWTConfig    `yaml:"jwt"`
+	Server     ServerConfig `yaml:"server"`
+	MySQL      MySQLConfig  `yaml:"mysql"`
+	JWT        JWTConfig    `yaml:"jwt"`
+	HttpServer HttpServer   `yaml:"http"`
 }
 
 type ServerConfig struct {
@@ -33,21 +35,39 @@ type JWTConfig struct {
 	ExpireHours int `yaml:"expireHours"`
 }
 
+type HttpServer struct {
+	Server HttpServerConfig `yaml:"server"`
+}
+
+type HttpServerConfig struct {
+	ReadTimeOut       time.Duration `yaml:"readTimeout"`
+	WriteTimeout      time.Duration `yaml:"writeTimeout"`
+	IdleTimeout       time.Duration `yaml:"idleTimeout"`
+	ReadHeaderTimeout time.Duration `yaml:"readHeaderTimeout"`
+	MaxHeaderBytesKib int           `yaml:"maxHeaderBytesKib"`
+}
+
 var (
-	ErrReadConfigFileFailed          = errors.New("read file failed")
-	ErrUnmarshalConfigFileDataFailed = errors.New("unmarshal config file data failed")
-	ErrInvalidServerPort             = errors.New("Invalid server port")
-	ErrInvalidExpireHours            = errors.New("Invalid expire hours")
-	ErrInvalidMySQLPort              = errors.New("invalid mysql port")
-	ErrMySQLDatabaseNotFound         = errors.New("MySQL database name not found")
-	ErrMySQLUserNotFound             = errors.New("MySQL user not found")
-	ErrMySQLHostNotFound             = errors.New("MySQL host not found")
+	ErrReadConfigFileFailed               = errors.New("read file failed")
+	ErrUnmarshalConfigFileDataFailed      = errors.New("unmarshal config file data failed")
+	ErrInvalidServerPort                  = errors.New("Invalid server port")
+	ErrInvalidExpireHours                 = errors.New("Invalid expire hours")
+	ErrInvalidMySQLPort                   = errors.New("invalid mysql port")
+	ErrMySQLDatabaseNotFound              = errors.New("MySQL database name not found")
+	ErrMySQLUserNotFound                  = errors.New("MySQL user not found")
+	ErrMySQLHostNotFound                  = errors.New("MySQL host not found")
+	ErrInvalidHttpServerReadTimeout       = errors.New("Invalid server read time out")
+	ErrInvalidHttpServerWriteTimeout      = errors.New("Invalid server write time out")
+	ErrInvalidHttpServerIdleTimeout       = errors.New("Invalid server idle time out")
+	ErrInvalidHttpServerReadHeaderTimeout = errors.New("Invalid server read header time out")
+	ErrInvalidHttpServerMaxHeaderBytes    = errors.New("Invalid server max header bytes")
 )
 
 func (c Config) Validate() error {
 	server := c.Server
 	mysql := c.MySQL
 	jwt := c.JWT
+	http := c.HttpServer.Server
 
 	if server.Port <= 0 {
 		return ErrInvalidServerPort
@@ -73,6 +93,27 @@ func (c Config) Validate() error {
 	if mysql.User == "" {
 		return ErrMySQLUserNotFound
 	}
+
+	if http.ReadTimeOut <= 0 {
+		return ErrInvalidHttpServerReadTimeout
+	}
+
+	if http.WriteTimeout <= 0 {
+		return ErrInvalidHttpServerWriteTimeout
+	}
+
+	if http.IdleTimeout <= 0 {
+		return ErrInvalidHttpServerIdleTimeout
+	}
+
+	if http.ReadHeaderTimeout <= 0 {
+		return ErrInvalidHttpServerReadHeaderTimeout
+	}
+
+	if http.MaxHeaderBytesKib <= 0 {
+		return ErrInvalidHttpServerMaxHeaderBytes
+	}
+
 	return nil
 }
 
@@ -109,6 +150,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	applyEnvOverrides(&cfg)
+	applyDefaults(&cfg)
 
 	if err = cfg.Validate(); err != nil {
 		return nil, err
@@ -207,5 +249,25 @@ func applyEnvOverrides(cfg *Config) {
 		if hours, err := strconv.Atoi(v); err == nil {
 			cfg.JWT.ExpireHours = hours
 		}
+	}
+}
+
+func applyDefaults(cfg *Config) {
+	http := &cfg.HttpServer.Server
+
+	if http.ReadTimeOut == 0 {
+		http.ReadTimeOut = 5 * time.Second
+	}
+	if http.WriteTimeout == 0 {
+		http.WriteTimeout = 10 * time.Second
+	}
+	if http.IdleTimeout == 0 {
+		http.IdleTimeout = 60 * time.Second
+	}
+	if http.ReadHeaderTimeout == 0 {
+		http.ReadHeaderTimeout = 2 * time.Second
+	}
+	if http.MaxHeaderBytesKib == 0 {
+		http.MaxHeaderBytesKib = 512
 	}
 }

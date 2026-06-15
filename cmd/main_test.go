@@ -118,7 +118,7 @@ func baseRunDeps(t *testing.T) appDeps {
 		setupRouter: func(db *gorm.DB) http.Handler {
 			return http.NewServeMux()
 		},
-		newServer: func(addr string, handler http.Handler) appServer {
+		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 			return &fakeAppServer{listenErr: http.ErrServerClosed}
 		},
 		notify:          func(c chan<- os.Signal, sig ...os.Signal) {},
@@ -138,7 +138,7 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.setupRouter(nil) == nil {
 		t.Fatal("expected default router")
 	}
-	if deps.newServer(":0", http.NewServeMux()) == nil {
+	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {
 		t.Fatal("expected default http server")
 	}
 }
@@ -255,7 +255,7 @@ func TestRunReturnsDatabaseHandleError(t *testing.T) {
 func TestRunReturnsListenError(t *testing.T) {
 	expectedErr := errors.New("listen failed")
 	deps := baseRunDeps(t)
-	deps.newServer = func(addr string, handler http.Handler) appServer {
+	deps.newServer = func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 		return &fakeAppServer{listenErr: expectedErr}
 	}
 
@@ -284,7 +284,7 @@ func TestRunReturnsShutdownError(t *testing.T) {
 		stop:        make(chan struct{}),
 	}
 	deps := baseRunDeps(t)
-	deps.newServer = func(addr string, handler http.Handler) appServer {
+	deps.newServer = func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 		return server
 	}
 	deps.notify = func(c chan<- os.Signal, sig ...os.Signal) {
@@ -308,7 +308,7 @@ func TestRunShutsDownGracefullyOnSignal(t *testing.T) {
 	}
 	deps := baseRunDeps(t)
 	deps.shutdownTimeout = 0
-	deps.newServer = func(addr string, handler http.Handler) appServer {
+	deps.newServer = func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 		return server
 	}
 	deps.notify = func(c chan<- os.Signal, sig ...os.Signal) {
