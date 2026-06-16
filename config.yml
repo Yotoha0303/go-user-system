@@ -18,5 +18,5 @@ http:
     writeTimeout: 10s
     idleTimeout: 60s
     readHeaderTimeout: 2s
-    maxHeaderBytesKib: 512
+    maxHeaderBytesKib: 128
     timeout: 5m

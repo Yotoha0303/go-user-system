@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"go-user-system/config"
-	"go-user-system/internal/utils"
+	"go-user-system/internal/auth"
 	"go-user-system/pkg/database"
 	"go-user-system/router"
 	"log"
@@ -25,11 +25,12 @@ type appServer interface {
 }
 
 type appDeps struct {
-	loadEnv         func()
-	loadConfig      func(path string) (*config.Config, error)
-	initJWTKey      func(cfg *config.Config) error
+	loadEnv    func()
+	loadConfig func(path string) (*config.Config, error)
+	// initJWTKey      func(cfg *config.Config) error
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
-	setupRouter     func(db *gorm.DB, logger *slog.Logger, timeout time.Duration) http.Handler
+	newTokenManager func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error)
+	setupRouter     func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler
 	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
 	shutdownTimeout time.Duration
@@ -39,10 +40,13 @@ func defaultAppDeps() appDeps {
 	return appDeps{
 		loadEnv:    config.LoadEnv,
 		loadConfig: config.Load,
-		initJWTKey: utils.InitJWTKey,
-		initDB:     database.InitDB,
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, timeout time.Duration) http.Handler {
-			return router.SetupRouter(db, logger, timeout)
+		// initJWTKey: utils.InitJWTKey,
+		initDB: database.InitDB,
+		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
+			return auth.NewTokenManager(secret, issuer, ttl)
+		},
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler {
+			return router.SetupRouter(db, logger, timeout, tokenManager)
 		},
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
@@ -77,9 +81,9 @@ func run(deps appDeps) error {
 		return fmt.Errorf("load config failed: %w", err)
 	}
 
-	if err := deps.initJWTKey(cfg); err != nil {
-		return fmt.Errorf("init jwt key failed: %w", err)
-	}
+	// if err := deps.initJWTKey(cfg); err != nil {
+	// 	return fmt.Errorf("init jwt key failed: %w", err)
+	// }
 
 	db, err := deps.initDB(cfg)
 
@@ -100,7 +104,17 @@ func run(deps appDeps) error {
 
 	slog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	r := deps.setupRouter(db, slog, cfg.HttpServer.Server.Timeout)
+	tokenManager, err := deps.newTokenManager(
+		os.Getenv("JWT_SECRET"),
+		"go-user-system",
+		time.Duration(cfg.JWT.ExpireHours)*time.Hour,
+	)
+
+	if err != nil {
+		return fmt.Errorf("new token manager failed: %w", err)
+	}
+
+	r := deps.setupRouter(db, slog, cfg.HttpServer.Server.Timeout, tokenManager)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"go-user-system/internal/apperror"
+	"go-user-system/internal/auth"
 	"go-user-system/internal/model"
 	"go-user-system/internal/request"
 	"go-user-system/internal/response"
 	"go-user-system/internal/service"
-	"go-user-system/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,10 +26,11 @@ type UserHandler struct {
 	generateToken func(userID int64, username string) (string, error)
 }
 
-func NewUserHandler(userService UserService) *UserHandler {
+func NewUserHandler(userService UserService, tokenManager *auth.TokenManager) *UserHandler {
+
 	return &UserHandler{
 		userService:   userService,
-		generateToken: utils.GenerateToken,
+		generateToken: tokenManager.GenerateAccessToken,
 	}
 }
 

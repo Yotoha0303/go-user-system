@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"errors"
+	"go-user-system/internal/auth"
 	"go-user-system/internal/response"
-	"go-user-system/internal/utils"
 	"net/http"
 	"strings"
 
@@ -11,9 +11,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var parseToken = utils.ParseToken
+// var parseToken = utils.ParseToken
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(tokenManager *auth.TokenManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if strings.TrimSpace(authHeader) == "" {
@@ -35,7 +35,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims, err := parseToken(tokenString)
+		claims, err := tokenManager.ParseAccessToken(tokenString)
 		if err != nil {
 			switch {
 			case errors.Is(err, jwt.ErrTokenMalformed):

@@ -5,16 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go-user-system/config"
 	"go-user-system/internal/apperror"
+	"go-user-system/internal/auth"
 	"go-user-system/internal/model"
 	"go-user-system/internal/request"
 	"go-user-system/internal/response"
 	"go-user-system/internal/service"
-	"go-user-system/internal/utils"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -102,21 +102,24 @@ func withUserID(userID int64) gin.HandlerFunc {
 	}
 }
 
-func initJWTForHandlerTest(t *testing.T) {
+func testTokenManager(t *testing.T) *auth.TokenManager {
 	t.Helper()
 
-	t.Setenv("JWT_SECRET", "handler_test_jwt_secret_32_chars")
-	err := utils.InitJWTKey(&config.Config{
-		JWT: config.JWTConfig{ExpireHours: 24},
-	})
+	tokenManager, err := auth.NewTokenManager(
+		"handler_test_jwt_secret_32_chars",
+		"go-user-system-test",
+		24*time.Hour,
+	)
+
 	if err != nil {
-		t.Fatalf("init jwt key failed: %v", err)
+		t.Fatalf("new token manager failed: %v", err)
 	}
+	return tokenManager
 }
 
 func TestRegisterHandlerReturnsSuccess(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.RegisterHandler,
@@ -142,7 +145,7 @@ func TestRegisterHandlerReturnsSuccess(t *testing.T) {
 
 func TestRegisterHandlerMapsServiceError(t *testing.T) {
 	fakeService := &fakeUserService{registerErr: service.ErrUsernameAlreadyExists}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.RegisterHandler,
@@ -169,7 +172,7 @@ func TestRegisterHandlerMapsWrappedAppErrorWithCause(t *testing.T) {
 			errors.New("insert failed"),
 		),
 	}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.RegisterHandler,
@@ -189,7 +192,7 @@ func TestRegisterHandlerMapsWrappedAppErrorWithCause(t *testing.T) {
 
 func TestRegisterHandlerMapsPlainErrorToFallback(t *testing.T) {
 	fakeService := &fakeUserService{registerErr: errors.New("plain failure")}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.RegisterHandler,
@@ -209,7 +212,7 @@ func TestRegisterHandlerMapsPlainErrorToFallback(t *testing.T) {
 
 func TestRegisterHandlerRejectsInvalidJSON(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.RegisterHandler,
@@ -232,7 +235,7 @@ func TestRegisterHandlerRejectsInvalidJSON(t *testing.T) {
 
 func TestLoginHandlerRejectsInvalidJSON(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.LoginHandler,
@@ -254,7 +257,7 @@ func TestLoginHandlerRejectsInvalidJSON(t *testing.T) {
 }
 
 func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
-	initJWTForHandlerTest(t)
+	testTokenManager(t)
 
 	fakeService := &fakeUserService{
 		loginUser: &model.User{
@@ -264,7 +267,7 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 			Status:   model.UserStatusActive,
 		},
 	}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.LoginHandler,
@@ -302,7 +305,7 @@ func TestLoginHandlerMapsTokenGenerationError(t *testing.T) {
 			Status:   model.UserStatusActive,
 		},
 	}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 	userHandler.generateToken = func(userID int64, username string) (string, error) {
 		return "", errors.New("sign failed")
 	}
@@ -325,7 +328,7 @@ func TestLoginHandlerMapsTokenGenerationError(t *testing.T) {
 
 func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
 	fakeService := &fakeUserService{loginErr: service.ErrInvalidCredentials}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.LoginHandler,
@@ -345,7 +348,7 @@ func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
 
 func TestMeHandlerMapsServiceError(t *testing.T) {
 	fakeService := &fakeUserService{profileErr: service.ErrUserNotFound}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.MeHandler,
@@ -373,7 +376,7 @@ func TestMeHandlerReturnsCurrentUser(t *testing.T) {
 			Status:   model.UserStatusActive,
 		},
 	}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.MeHandler,
@@ -397,7 +400,7 @@ func TestMeHandlerReturnsCurrentUser(t *testing.T) {
 
 func TestMeHandlerRejectsMissingUserID(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.MeHandler,
@@ -417,7 +420,7 @@ func TestMeHandlerRejectsMissingUserID(t *testing.T) {
 
 func TestMeHandlerRejectsInvalidUserIDType(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.MeHandler,
@@ -441,7 +444,7 @@ func TestMeHandlerRejectsInvalidUserIDType(t *testing.T) {
 
 func TestUpdateProfileHandlerRejectsMissingUserID(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.UpdateProfileHandler,
@@ -464,7 +467,7 @@ func TestUpdateProfileHandlerRejectsMissingUserID(t *testing.T) {
 
 func TestUpdateProfileHandlerRejectsInvalidUserIDType(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.UpdateProfileHandler,
@@ -491,7 +494,7 @@ func TestUpdateProfileHandlerRejectsInvalidUserIDType(t *testing.T) {
 
 func TestUpdateProfileHandlerCallsService(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.UpdateProfileHandler,
@@ -521,7 +524,7 @@ func TestUpdateProfileHandlerCallsService(t *testing.T) {
 
 func TestUpdateProfileHandlerMapsServiceError(t *testing.T) {
 	fakeService := &fakeUserService{updateErr: service.ErrNicknameTooLong}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.UpdateProfileHandler,
@@ -542,7 +545,7 @@ func TestUpdateProfileHandlerMapsServiceError(t *testing.T) {
 
 func TestUpdateProfileHandlerRejectsInvalidJSON(t *testing.T) {
 	fakeService := &fakeUserService{}
-	userHandler := NewUserHandler(fakeService)
+	userHandler := NewUserHandler(fakeService, testTokenManager(t))
 
 	recorder := performJSONRequest(
 		userHandler.UpdateProfileHandler,

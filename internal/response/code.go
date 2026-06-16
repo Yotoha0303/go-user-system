@@ -30,4 +30,6 @@ var (
 	CodeReadinessFailed = 5001
 
 	CodeDatabaseNotInitialized = 5002
+
+	CodeInternalError = 6001
 )
