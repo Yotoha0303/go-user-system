@@ -5,17 +5,22 @@ import (
 	"go-user-system/internal/middleware"
 	"go-user-system/internal/service"
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, logger *slog.Logger) *gin.Engine {
+func SetupRouter(db *gorm.DB, logger *slog.Logger, timeout time.Duration) *gin.Engine {
 	r := gin.New()
 
-	r.Use(gin.Recovery())
-	r.Use(middleware.RequestID())
-	r.Use(middleware.SlogMiddleware(logger))
+	// TODO 新增自定义 Recovery 中间件，以捕获业务层报错
+	r.Use(
+		middleware.RequestID(),
+		middleware.SlogMiddleware(logger),
+		middleware.TimeoutMiddleware(timeout),
+		gin.Recovery(),
+	)
 
 	userService := service.NewUserService(db)
 	userHandler := handler.NewUserHandler(userService)
@@ -55,5 +60,7 @@ func registerUsersRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) 
 	{
 		users.GET("/me", userHandler.MeHandler)
 		users.PUT("/me/profile", userHandler.UpdateProfileHandler)
+		users.PUT("/me/login/out", userHandler.LoginOutHandler)
+		users.PATCH("/me/update/password", userHandler.UpdateUserPasswordHandler)
 	}
 }

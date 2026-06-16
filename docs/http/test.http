@@ -1,6 +1,6 @@
 @baseUrl = http://127.0.0.1:8082
 @username = "test_name"
-@password = "test1234"
+@password = "test123456"
 @nickname = "test_nickname"
 
 ### 0. 服务器健康检查
@@ -44,4 +44,18 @@ Authorization: Bearer <access_token>
 
 {
   "nickname": {{nickname}}
+}
+
+### 5. 用户退出登录
+PUT {{baseUrl}}/api/v1/users/me/login/out
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+### 6. 修改用户密码
+PATCH  {{baseUrl}}/api/v1/users/me/update/password
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "password":"test123456"
 }

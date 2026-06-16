@@ -18,6 +18,7 @@ type UserService interface {
 	Login(ctx context.Context, req request.LoginRequest) (*model.User, error)
 	GetProfile(ctx context.Context, userID int64) (*model.User, error)
 	UpdateNickname(ctx context.Context, userID int64, nickname string) error
+	UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error
 }
 
 type UserHandler struct {
@@ -178,5 +179,54 @@ func (h *UserHandler) UpdateProfileHandler(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, nil)
+}
+
+func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
+	value, exists := c.Get("user_id")
+	if !exists {
+		handleError(
+			c,
+			apperror.New(
+				http.StatusInternalServerError,
+				response.CodeTokenUserMissing,
+				"没有找到用户信息",
+			),
+			response.CodeUpdateNicknameFailed,
+			"更改昵称失败",
+		)
+		return
+	}
+
+	userID, ok := value.(int64)
+	if !ok {
+		handleError(
+			c,
+			apperror.New(
+				http.StatusInternalServerError,
+				response.CodeTokenUserInvalid,
+				"无效的用户信息",
+			),
+			response.CodeUpdateNicknameFailed,
+			"更改昵称失败",
+		)
+		return
+	}
+
+	var req request.UpdatePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, response.CodeInvalidParams, "参数错误")
+		return
+	}
+
+	if err := h.userService.UpdateUserPassword(c, userID, req); err != nil {
+		handleError(c, err, http.StatusInternalServerError, "修改密码失败")
+		return
+	}
+
+	response.Success(c, nil)
+}
+
+func (h *UserHandler) LoginOutHandler(c *gin.Context) {
 	response.Success(c, nil)
 }

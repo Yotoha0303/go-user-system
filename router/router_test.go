@@ -3,6 +3,8 @@ package router
 import (
 	"encoding/json"
 	"go-user-system/internal/response"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,13 +12,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func TestPingReturnsSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 
-	SetupRouter(nil, nil).ServeHTTP(recorder, request)
+	SetupRouter(nil, testLogger(), 0).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
@@ -37,7 +43,7 @@ func TestReadyzFailsWhenDatabaseIsNotInitialized(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 
-	SetupRouter(nil, nil).ServeHTTP(recorder, request)
+	SetupRouter(nil, testLogger(), 0).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)

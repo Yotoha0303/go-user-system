@@ -51,6 +51,7 @@ type HttpServerConfig struct {
 	IdleTimeout       time.Duration `yaml:"idleTimeout"`
 	ReadHeaderTimeout time.Duration `yaml:"readHeaderTimeout"`
 	MaxHeaderBytesKib int           `yaml:"maxHeaderBytesKib"`
+	Timeout           time.Duration `yaml:"timeout"`
 }
 
 var (

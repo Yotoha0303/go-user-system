@@ -16,7 +16,11 @@ type requestIDContextKey struct{}
 
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestID := uuid.NewString()
+		requestID := c.GetHeader(RequestIDHeader)
+
+		if requestID == "" {
+			requestID = uuid.NewString()
+		}
 
 		c.Set(RequestIDKey, requestID)
 

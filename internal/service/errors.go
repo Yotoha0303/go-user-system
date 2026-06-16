@@ -31,6 +31,12 @@ var (
 		"username not found",
 	)
 
+	ErrUserPasswordNoDifference = apperror.New(
+		http.StatusConflict,
+		response.CodeUserPasswordNoDifference,
+		"user password no difference",
+	)
+
 	ErrUserDisabled = apperror.New(
 		http.StatusForbidden,
 		response.CodeUserDisabled,

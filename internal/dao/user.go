@@ -36,3 +36,16 @@ func withContext(ctx context.Context, db *gorm.DB) *gorm.DB {
 	}
 	return db.WithContext(ctx)
 }
+
+func UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error {
+	return withContext(ctx, db).Where("password_hash = ? and id = ?", oldPasswordHash, userID).Model(&model.User{}).Update("password_hash", newPasswordHash).Error
+}
+
+func ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error) {
+	var user model.User
+	return user, withContext(ctx, db).Find(user).Limit(limit).Offset(offset).Error
+}
+
+func UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
+	return withContext(ctx, db).Where("id = ? and status = ?", userID, model.UserStatusActive).Model(&model.User{}).Update("status", model.UserStatusDisabled).Error
+}

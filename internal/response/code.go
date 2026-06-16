@@ -5,11 +5,13 @@ var (
 
 	CodeInvalidParams = 1001
 
-	CodeUsernameAlreadyExists = 2001
-	CodeRegisterFailed        = 2002
-	CodeUserNotFound          = 2003
-	CodeUserDisabled          = 2004
-	CodeLoginFailed           = 2005
+	CodeUsernameAlreadyExists    = 2001
+	CodeRegisterFailed           = 2002
+	CodeUserNotFound             = 2003
+	CodeUserDisabled             = 2004
+	CodeLoginFailed              = 2005
+	CodeUserPasswordNoDifference = 2006
+	CodeUpdateUserPasswordFailed = 2007
 
 	CodeTokenGenerateFailed   = 3001
 	CodeTokenUserMissing      = 3002

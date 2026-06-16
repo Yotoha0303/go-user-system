@@ -29,7 +29,7 @@ type appDeps struct {
 	loadConfig      func(path string) (*config.Config, error)
 	initJWTKey      func(cfg *config.Config) error
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
-	setupRouter     func(db *gorm.DB, logger *slog.Logger) http.Handler
+	setupRouter     func(db *gorm.DB, logger *slog.Logger, timeout time.Duration) http.Handler
 	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
 	shutdownTimeout time.Duration
@@ -41,8 +41,8 @@ func defaultAppDeps() appDeps {
 		loadConfig: config.Load,
 		initJWTKey: utils.InitJWTKey,
 		initDB:     database.InitDB,
-		setupRouter: func(db *gorm.DB, logger *slog.Logger) http.Handler {
-			return router.SetupRouter(db, logger)
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, timeout time.Duration) http.Handler {
+			return router.SetupRouter(db, logger, timeout)
 		},
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
@@ -100,7 +100,7 @@ func run(deps appDeps) error {
 
 	slog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	r := deps.setupRouter(db, slog)
+	r := deps.setupRouter(db, slog, cfg.HttpServer.Server.Timeout)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

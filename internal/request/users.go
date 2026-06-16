@@ -13,3 +13,7 @@ type LoginRequest struct {
 type UpdateProfileRequest struct {
 	Nickname string `json:"nickname" binding:"required"`
 }
+
+type UpdatePasswordRequest struct {
+	Password string `json:"password" binding:"required"`
+}

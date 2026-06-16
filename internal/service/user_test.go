@@ -115,15 +115,18 @@ type fakeUserStore struct {
 	updateNicknameErr  error
 	updateLastLoginErr error
 
-	createdUser      *model.User
-	updatedUserID    int64
-	updatedNickname  string
-	lastLoginUserID  int64
-	lastLoginAt      time.Time
-	createCalled     bool
-	updateCalled     bool
-	lastLoginCalled  bool
-	getUsernameInput string
+	createdUser                   *model.User
+	updatedUserID                 int64
+	updatedNickname               string
+	lastLoginUserID               int64
+	lastLoginAt                   time.Time
+	createCalled                  bool
+	updateCalled                  bool
+	lastLoginCalled               bool
+	getUsernameInput              string
+	updateUserPasswordByUserIDErr error
+	oldPasswordHash               string
+	newPasswordHash               string
 }
 
 func (s *fakeUserStore) CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
@@ -153,6 +156,24 @@ func (s *fakeUserStore) UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, 
 	s.lastLoginUserID = id
 	s.lastLoginAt = lastLoginAt
 	return s.updateLastLoginErr
+}
+
+func (s *fakeUserStore) UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash string, newPasswordHash string) error {
+	s.lastLoginUserID = userID
+	s.oldPasswordHash = oldPasswordHash
+	s.newPasswordHash = newPasswordHash
+	return s.updateUserPasswordByUserIDErr
+}
+
+// TODO
+func (s *fakeUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error) {
+	var user model.User
+	return user, nil
+}
+
+// TODO
+func (s *fakeUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
+	return nil
 }
 
 func newUnitUserService(store *fakeUserStore) *UserService {

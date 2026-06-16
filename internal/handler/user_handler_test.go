@@ -22,12 +22,13 @@ import (
 type requestContextKey struct{}
 
 type fakeUserService struct {
-	registerErr error
-	loginUser   *model.User
-	loginErr    error
-	profileUser *model.User
-	profileErr  error
-	updateErr   error
+	registerErr           error
+	loginUser             *model.User
+	loginErr              error
+	profileUser           *model.User
+	profileErr            error
+	updateErr             error
+	updateUserPasswordErr error
 
 	registerCalled bool
 	updateCalled   bool
@@ -61,6 +62,11 @@ func (s *fakeUserService) UpdateNickname(ctx context.Context, userID int64, nick
 	s.updatedUserID = userID
 	s.updatedName = nickname
 	return s.updateErr
+}
+
+func (s *fakeUserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
+
+	return s.updateUserPasswordErr
 }
 
 func performJSONRequest(handlerFunc gin.HandlerFunc, method string, path string, body string, middlewares ...gin.HandlerFunc) *httptest.ResponseRecorder {

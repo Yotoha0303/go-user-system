@@ -35,6 +35,9 @@ type userStore interface {
 	GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error)
 	UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error
 	UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error
+	UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error
+	ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error)
+	UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error
 }
 
 type daoUserStore struct{}
@@ -57,6 +60,18 @@ func (daoUserStore) UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int6
 
 func (daoUserStore) UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error {
 	return dao.UpdateLastLoginAtByID(ctx, db, id, lastLoginAt)
+}
+
+func (daoUserStore) UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error {
+	return dao.UpdateUserPasswordByUserID(ctx, db, userID, oldPasswordHash, newPasswordHash)
+}
+
+func (daoUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error) {
+	return dao.ListUser(ctx, db, limit, offset)
+}
+
+func (daoUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
+	return dao.UserDisabled(ctx, db, userID)
 }
 
 func (s *UserService) ensureDB() error {
@@ -242,5 +257,47 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 			err,
 		)
 	}
+	return nil
+}
+
+// FIX 修改用户密码后，需要禁用上一次登录时的 access_token ，防止密码被再次修改
+func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		user, err := s.store.GetUserByID(ctx, tx, userID)
+		if err != nil {
+			return ErrUserNotFound
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err == nil {
+			return ErrUserPasswordNoDifference
+		}
+
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return ErrInvalidCredentials
+		}
+		if err := s.store.UpdateUserPasswordByUserID(ctx, s.db, userID, user.PasswordHash, string(passwordHash)); err != nil {
+			return apperror.Wrap(
+				http.StatusInternalServerError,
+				response.CodeUpdateUserPasswordFailed,
+				"修改密码失败",
+				err,
+			)
+		}
+
+		return nil
+	})
+}
+
+// TODO 查询所有用户-只有管理员才能够遍历用户
+func (s *UserService) ListUser(ctx context.Context) (model.User, error) {
+	var user model.User
+
+	return user, nil
+}
+
+// TODO 禁用用户-只有管理员才能够禁用用户
+func (s *UserService) UserDisabled(ctx context.Context, userID int64) error {
+
 	return nil
 }
