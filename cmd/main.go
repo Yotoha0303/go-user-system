@@ -62,12 +62,14 @@ func defaultAppDeps() appDeps {
 	}
 }
 
-var getDefaultAppDeps = defaultAppDeps
-var fatalf = log.Fatalf
+var (
+	getDefaultAppDeps = defaultAppDeps
+	fatalf            = log.Fatalf
+)
 
 func main() {
 	if err := run(getDefaultAppDeps()); err != nil {
-		fatalf("application failed: %v", err)
+		log.Fatalf("application failed: %v", err)
 	}
 }
 
@@ -150,6 +152,6 @@ func run(deps appDeps) error {
 	if err := server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown failed: %w", err)
 	}
-	log.Printf("server stopped")
+	log.Println("server stopped")
 	return nil
 }

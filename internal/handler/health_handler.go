@@ -50,6 +50,11 @@ func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 		return
 	}
 
+	if err := sqlDB.PingContext(c); err != nil {
+		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
+		return
+	}
+
 	response.Success(c, gin.H{
 		"status": "ready",
 	})

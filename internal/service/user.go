@@ -86,6 +86,12 @@ func (s *UserService) ensureDB() error {
 	return nil
 }
 
+func validatePassword(password string) error {
+	if len(password) < 6 || len(password) > 54 {
+		return ErrPasswordTooShort
+	}
+}
+
 func (s *UserService) Register(ctx context.Context, req request.RegisterRequest) error {
 
 	username := strings.TrimSpace(req.Username)
@@ -94,8 +100,8 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 		return ErrUsernameTooShort
 	}
 
-	if len(req.Password) < 6 {
-		return ErrPasswordTooShort
+	if err := validatePassword(req.Password); err != nil {
+		return err
 	}
 
 	if err := s.ensureDB(); err != nil {
@@ -108,7 +114,7 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return apperror.Wrap(
-			http.StatusInternalServerError,
+			http.StatusConflict,
 			response.CodeRegisterFailed,
 			"注册失败",
 			err,
@@ -265,23 +271,31 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 	return nil
 }
 
-// FIX 修改用户密码后，需要禁用上一次登录时的 access_token ，防止密码被再次修改
+// TODO 修改用户密码后，需要禁用上一次登录时的 access_token ，防止密码被再次修改
 func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+
+		if req.OldPassword == req.NewPassword {
+			return ErrUserPasswordNoDifference
+		}
 		user, err := s.store.GetUserByID(ctx, tx, userID)
 		if err != nil {
 			return ErrUserNotFound
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err == nil {
-			return ErrUserPasswordNoDifference
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.OldPassword)); err != nil {
+			return ErrUserEnteredTheOldPasswordIncorrectly
 		}
 
-		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err := validatePassword(req.NewPassword); err != nil {
+			return err
+		}
+
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
 			return ErrInvalidCredentials
 		}
-		if err := s.store.UpdateUserPasswordByUserID(ctx, s.db, userID, user.PasswordHash, string(passwordHash)); err != nil {
+		if err := s.store.UpdateUserPasswordByUserID(ctx, tx, userID, user.PasswordHash, string(passwordHash)); err != nil {
 			return apperror.Wrap(
 				http.StatusInternalServerError,
 				response.CodeUpdateUserPasswordFailed,
@@ -289,6 +303,8 @@ func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req 
 				err,
 			)
 		}
+
+		// 使旧 token 失效；记录安全审计日志？
 
 		return nil
 	})

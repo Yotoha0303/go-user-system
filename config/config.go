@@ -68,6 +68,7 @@ var (
 	ErrInvalidHttpServerIdleTimeout       = errors.New("invalid server idle time out")
 	ErrInvalidHttpServerReadHeaderTimeout = errors.New("invalid server read header time out")
 	ErrInvalidHttpServerMaxHeaderBytes    = errors.New("invalid server max header bytes")
+	ErrInvalidHttpServerTimeout           = errors.New("invalid http server time out")
 	ErrMySQLMaxOpenConnsFailed            = errors.New("MySQL max open conns failed")
 	ErrMySQLMaxIdleConnsFailed            = errors.New("MySQL mysql max idle conns failed")
 	ErrMySQLInvalidConnMaxIdleTime        = errors.New("invalid mysql conn max idle time")
@@ -124,6 +125,10 @@ func (c Config) Validate() error {
 
 	if http.MaxHeaderBytesKib <= 0 {
 		return ErrInvalidHttpServerMaxHeaderBytes
+	}
+
+	if http.Timeout <= 0 {
+		return ErrInvalidHttpServerTimeout
 	}
 
 	if mysql.MaxOpenConns <= 0 {

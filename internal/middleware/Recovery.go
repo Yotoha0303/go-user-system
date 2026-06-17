@@ -10,6 +10,11 @@ import (
 )
 
 func Recovery(logger *slog.Logger) gin.HandlerFunc {
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return func(c *gin.Context) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
@@ -33,10 +38,6 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 					)
 				}
 				c.Abort()
-			}
-
-			if logger == nil {
-				logger = slog.Default()
 			}
 		}()
 		c.Next()

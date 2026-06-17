@@ -37,6 +37,12 @@ var (
 		"user password no difference",
 	)
 
+	ErrUserEnteredTheOldPasswordIncorrectly = apperror.New(
+		http.StatusConflict,
+		response.CodeUserPasswordNoDifference,
+		"user entered the old password incorrectly",
+	)
+
 	ErrUserDisabled = apperror.New(
 		http.StatusForbidden,
 		response.CodeUserDisabled,

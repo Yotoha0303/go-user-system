@@ -19,4 +19,4 @@ http:
     idleTimeout: 60s
     readHeaderTimeout: 2s
     maxHeaderBytesKib: 128
-    timeout: 5m
+    timeout: 5s

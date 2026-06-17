@@ -9,6 +9,12 @@ import (
 
 func TimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		if timeout <= 0 {
+			c.Next()
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 
 		defer cancel()
