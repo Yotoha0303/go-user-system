@@ -213,21 +213,6 @@ func TestRunReturnsLoadConfigError(t *testing.T) {
 	}
 }
 
-// TODO newManagerToken test
-func TestRunReturnsInitJWTError(t *testing.T) {
-	// expectedErr := errors.New("jwt failed")
-	// deps := baseRunDeps(t)
-	// deps.initJWTKey = func(cfg *config.Config) error {
-	// 	return expectedErr
-	// }
-
-	// err := run(deps)
-
-	// if !errors.Is(err, expectedErr) {
-	// 	t.Fatalf("expected init jwt error, got %v", err)
-	// }
-}
-
 func TestRunReturnsInitDBError(t *testing.T) {
 	expectedErr := errors.New("db failed")
 	deps := baseRunDeps(t)

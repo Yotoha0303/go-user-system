@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
@@ -20,6 +21,11 @@ func GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*mode
 func GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
 	var user model.User
 	return &user, withContext(ctx, db).Where("id = ?", id).First(&user).Error
+}
+
+func GetUserByIDForUpdate(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
+	var user model.User
+	return &user, withContext(ctx, db).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&user).Error
 }
 
 func UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error {

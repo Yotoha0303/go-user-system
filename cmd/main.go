@@ -25,9 +25,8 @@ type appServer interface {
 }
 
 type appDeps struct {
-	loadEnv    func()
-	loadConfig func(path string) (*config.Config, error)
-	// initJWTKey      func(cfg *config.Config) error
+	loadEnv         func()
+	loadConfig      func(path string) (*config.Config, error)
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
 	newTokenManager func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error)
 	setupRouter     func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler
@@ -40,8 +39,7 @@ func defaultAppDeps() appDeps {
 	return appDeps{
 		loadEnv:    config.LoadEnv,
 		loadConfig: config.Load,
-		// initJWTKey: utils.InitJWTKey,
-		initDB: database.InitDB,
+		initDB:     database.InitDB,
 		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
 			return auth.NewTokenManager(secret, issuer, ttl)
 		},
@@ -80,10 +78,6 @@ func run(deps appDeps) error {
 	if err != nil {
 		return fmt.Errorf("load config failed: %w", err)
 	}
-
-	// if err := deps.initJWTKey(cfg); err != nil {
-	// 	return fmt.Errorf("init jwt key failed: %w", err)
-	// }
 
 	db, err := deps.initDB(cfg)
 

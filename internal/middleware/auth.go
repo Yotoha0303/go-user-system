@@ -11,8 +11,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// var parseToken = utils.ParseToken
-
 func AuthMiddleware(tokenManager *auth.TokenManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
