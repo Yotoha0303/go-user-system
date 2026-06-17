@@ -144,6 +144,10 @@ func (s *fakeUserStore) GetUserByID(ctx context.Context, db *gorm.DB, id int64) 
 	return s.userByID, s.userByIDErr
 }
 
+func (s *fakeUserStore) GetUserByIDForUpdate(ctx context.Context, db *gorm.DB, id int64) (*model.User, error) {
+	return s.userByID, s.userByIDErr
+}
+
 func (s *fakeUserStore) UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error {
 	s.updateCalled = true
 	s.updatedUserID = id

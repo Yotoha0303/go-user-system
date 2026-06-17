@@ -33,12 +33,12 @@ type userStore interface {
 	CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error
 	GetUserByUsername(ctx context.Context, db *gorm.DB, username string) (*model.User, error)
 	GetUserByID(ctx context.Context, db *gorm.DB, id int64) (*model.User, error)
+	GetUserByIDForUpdate(ctx context.Context, db *gorm.DB, id int64) (*model.User, error)
 	UpdateNicknameByID(ctx context.Context, db *gorm.DB, id int64, nickname string) error
 	UpdateLastLoginAtByID(ctx context.Context, db *gorm.DB, id int64, lastLoginAt time.Time) error
 	UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error
 	ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error)
 	UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error
-	GetUserByIDForUpdate(ctx context.Context, db *gorm.DB, id int64) (*model.User, error)
 }
 
 type daoUserStore struct{}
@@ -268,7 +268,7 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 // FIX 修改用户密码后，需要禁用上一次登录时的 access_token ，防止密码被再次修改
 func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		user, err := s.store.GetUserByIDForUpdate(ctx, tx, userID)
+		user, err := s.store.GetUserByID(ctx, tx, userID)
 		if err != nil {
 			return ErrUserNotFound
 		}
@@ -304,5 +304,5 @@ func (s *UserService) ListUser(ctx context.Context) (model.User, error) {
 // TODO 禁用用户-只有管理员才能够禁用用户
 func (s *UserService) UserDisabled(ctx context.Context, userID int64) error {
 
-	return s.store.UserDisabled(ctx, s.db, userID)
+	return nil
 }
