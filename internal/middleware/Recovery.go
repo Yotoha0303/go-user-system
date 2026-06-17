@@ -34,6 +34,10 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 				}
 				c.Abort()
 			}
+
+			if logger == nil {
+				logger = slog.Default()
+			}
 		}()
 		c.Next()
 	}

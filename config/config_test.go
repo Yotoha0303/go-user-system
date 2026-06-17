@@ -220,7 +220,7 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "missing mysql max open conns",
 			mutate: func(cfg *Config) {
-				cfg.MySQL.MaxOpenConns = -1
+				cfg.MySQL.MaxOpenConns = 0
 			},
 			expectErr: ErrMySQLMaxOpenConnsFailed,
 		},

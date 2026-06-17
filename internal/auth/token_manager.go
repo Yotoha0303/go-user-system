@@ -9,14 +9,14 @@ import (
 )
 
 var (
-	ErrAccessTokenInvalid   = errors.New("Invalid access token")
-	ErrJWTSecretTooShort    = errors.New("JWT_SECRET must be at least 32 characters")
-	ErrJWTIssuerEmpty       = errors.New("JWT issuer empty")
-	ErrJWTExpireInvalid     = errors.New("JWT expire invalid")
-	ErrInvalidJWTIssuer     = errors.New("Invalid jwt issuer")
-	ErrTokenIssuedAtMissing = errors.New("JWT token issued at missing")
-	ErrTokenUserInvalid     = errors.New("JWT token user invalid")
-	ErrTokenUsernameInvalid = errors.New("JWT token user name invalid")
+	ErrAccessTokenInvalid   = errors.New("invalid access token")
+	ErrJWTSecretTooShort    = errors.New("jwt secret must be at least 32 characters")
+	ErrJWTIssuerEmpty       = errors.New("jwt issuer empty")
+	ErrJWTExpireInvalid     = errors.New("jwt expire invalid")
+	ErrInvalidJWTIssuer     = errors.New("invalid jwt issuer")
+	ErrTokenIssuedAtMissing = errors.New("jwt token issued at missing")
+	ErrTokenUserInvalid     = errors.New("jwt token user invalid")
+	ErrTokenUsernameInvalid = errors.New("jwt token user name invalid")
 )
 
 type TokenManager struct {

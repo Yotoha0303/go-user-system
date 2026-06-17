@@ -162,7 +162,7 @@ func TestUpdateLastLoginAtByIDBuildsUpdateStatement(t *testing.T) {
 func TestWithContextUsesBackgroundWhenContextIsNil(t *testing.T) {
 	db := openDryRunDB(t)
 
-	got := withContext(nil, db)
+	got := withContext(context.Background(), db)
 
 	if got.Statement.Context == nil {
 		t.Fatal("expected context to be set")

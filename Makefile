@@ -4,10 +4,12 @@ IMAGE_NAME := go-user-system:dev
 GOPATH := $(shell go env GOPATH)
 GOOSE ?= $(subst \,/,$(GOPATH))/bin/goose.exe
 GOOSE_ENV ?= .env.goose
+GOLANGCI_LINT ?= golangci-lint
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run test coverage coverage-html integration-test race-test vet build build-windows build-linux clean tidy \
+.PHONY: help run test coverage coverage-html integration-test race-test vet lint lint-fix \
+	build build-windows build-linux clean tidy \
 	goose-version migrate-create migrate-validate migrate-status migrate-version migrate-up migrate-up-by-one migrate-down migrate-redo migrate-reset migrate-fix \
 	docker-build compose-up compose-down compose-logs ci
 
@@ -45,6 +47,9 @@ help:
 	@echo   compose-up          Start Docker Compose stack
 	@echo   compose-down        Stop Docker Compose stack
 	@echo   compose-logs        Follow app logs
+	@echo golangci:
+	@echo   lint                Run golangci-lint
+	@echo   lint-fix            Apply supported automatic lint fixes
 
 run:
 	go run ./cmd
@@ -120,6 +125,12 @@ migrate-reset:
 migrate-fix:
 	"$(GOOSE)" -env "$(GOOSE_ENV)" fix
 
+lint:
+	$(GOLANGCI_LINT) run ./...
+
+lint-fix:
+	$(GOLANGCI_LINT) run --fix ./...
+
 docker-build:
 	docker build -t $(IMAGE_NAME) .
 
@@ -133,7 +144,9 @@ compose-logs:
 	docker compose logs -f app
 
 ci:
+	$(MAKE) lint
 	$(MAKE) test
+	$(MAKE) race-test
 	$(MAKE) vet
 	$(MAKE) build
 	$(MAKE) docker-build

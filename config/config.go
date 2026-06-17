@@ -57,22 +57,22 @@ type HttpServerConfig struct {
 var (
 	ErrReadConfigFileFailed               = errors.New("read file failed")
 	ErrUnmarshalConfigFileDataFailed      = errors.New("unmarshal config file data failed")
-	ErrInvalidServerPort                  = errors.New("Invalid server port")
-	ErrInvalidExpireHours                 = errors.New("Invalid expire hours")
+	ErrInvalidServerPort                  = errors.New("invalid server port")
+	ErrInvalidExpireHours                 = errors.New("invalid expire hours")
 	ErrInvalidMySQLPort                   = errors.New("invalid mysql port")
 	ErrMySQLDatabaseNotFound              = errors.New("MySQL database name not found")
 	ErrMySQLUserNotFound                  = errors.New("MySQL user not found")
 	ErrMySQLHostNotFound                  = errors.New("MySQL host not found")
-	ErrInvalidHttpServerReadTimeout       = errors.New("Invalid server read time out")
-	ErrInvalidHttpServerWriteTimeout      = errors.New("Invalid server write time out")
-	ErrInvalidHttpServerIdleTimeout       = errors.New("Invalid server idle time out")
-	ErrInvalidHttpServerReadHeaderTimeout = errors.New("Invalid server read header time out")
-	ErrInvalidHttpServerMaxHeaderBytes    = errors.New("Invalid server max header bytes")
+	ErrInvalidHttpServerReadTimeout       = errors.New("invalid server read time out")
+	ErrInvalidHttpServerWriteTimeout      = errors.New("invalid server write time out")
+	ErrInvalidHttpServerIdleTimeout       = errors.New("invalid server idle time out")
+	ErrInvalidHttpServerReadHeaderTimeout = errors.New("invalid server read header time out")
+	ErrInvalidHttpServerMaxHeaderBytes    = errors.New("invalid server max header bytes")
 	ErrMySQLMaxOpenConnsFailed            = errors.New("MySQL max open conns failed")
 	ErrMySQLMaxIdleConnsFailed            = errors.New("MySQL mysql max idle conns failed")
-	ErrMySQLInvalidConnMaxIdleTime        = errors.New("Invalid mysql conn max idle time")
-	ErrMySQLInvalidConnMaxLifetime        = errors.New("Invalid mysql conn max life time")
-	ErrMySQLInvalidPingTimeout            = errors.New("Invalid mysql conn ping time out")
+	ErrMySQLInvalidConnMaxIdleTime        = errors.New("invalid mysql conn max idle time")
+	ErrMySQLInvalidConnMaxLifetime        = errors.New("invalid mysql conn max life time")
+	ErrMySQLInvalidPingTimeout            = errors.New("invalid mysql conn ping time out")
 )
 
 func (c Config) Validate() error {
@@ -126,7 +126,7 @@ func (c Config) Validate() error {
 		return ErrInvalidHttpServerMaxHeaderBytes
 	}
 
-	if mysql.MaxOpenConns < 0 {
+	if mysql.MaxOpenConns <= 0 {
 		return ErrMySQLMaxOpenConnsFailed
 	}
 
@@ -172,13 +172,13 @@ func Load(path string) (*Config, error) {
 
 	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrReadConfigFileFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrReadConfigFileFailed, err)
 	}
 
 	var cfg Config
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUnmarshalConfigFileDataFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrUnmarshalConfigFileDataFailed, err)
 	}
 
 	applyEnvOverrides(&cfg)
