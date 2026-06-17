@@ -41,7 +41,8 @@ http:
     writeTimeout: 10s
     idleTimeout: 60s
     readHeaderTimeout: 2s
-    MaxHeaderBytesKib: 512
+    maxHeaderBytesKib: 128
+    timeout: 5s
 
 `
 }
@@ -102,7 +103,8 @@ func validConfig() Config {
 				WriteTimeout:      10 * time.Second,
 				IdleTimeout:       60 * time.Second,
 				ReadHeaderTimeout: 2 * time.Second,
-				MaxHeaderBytesKib: 512,
+				MaxHeaderBytesKib: 128,
+				Timeout:           5 * time.Second,
 			},
 		},
 	}
@@ -216,6 +218,13 @@ func TestValidateConfig(t *testing.T) {
 				cfg.HttpServer.Server.MaxHeaderBytesKib = 0
 			},
 			expectErr: ErrInvalidHttpServerMaxHeaderBytes,
+		},
+		{
+			name: "missing http server time out",
+			mutate: func(cfg *Config) {
+				cfg.HttpServer.Server.Timeout = 0
+			},
+			expectErr: ErrInvalidHttpServerTimeout,
 		},
 		{
 			name: "missing mysql max open conns",

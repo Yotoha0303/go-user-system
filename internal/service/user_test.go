@@ -271,7 +271,7 @@ func TestRegisterValidatesPasswordLength(t *testing.T) {
 		Password: "12345",
 	})
 
-	if !errors.Is(err, ErrPasswordTooShort) {
+	if !errors.Is(err, ErrPasswordTooShortOrTooLong) {
 		t.Fatalf("expected ErrPasswordTooShort, got %v", err)
 	}
 }
@@ -429,10 +429,10 @@ func TestRegisterWrapsPasswordHashError(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: strings.Repeat("a", 73),
+		Password: strings.Repeat("a", 55),
 	})
 
-	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
+	assertServiceAppError(t, err, http.StatusBadRequest, response.CodeInvalidParams)
 }
 
 func TestRegisterWrapsCreateUserError(t *testing.T) {

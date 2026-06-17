@@ -88,8 +88,9 @@ func (s *UserService) ensureDB() error {
 
 func validatePassword(password string) error {
 	if len(password) < 6 || len(password) > 54 {
-		return ErrPasswordTooShort
+		return ErrPasswordTooShortOrTooLong
 	}
+	return nil
 }
 
 func (s *UserService) Register(ctx context.Context, req request.RegisterRequest) error {
@@ -114,7 +115,7 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return apperror.Wrap(
-			http.StatusConflict,
+			http.StatusInternalServerError,
 			response.CodeRegisterFailed,
 			"注册失败",
 			err,

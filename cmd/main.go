@@ -69,7 +69,7 @@ var (
 
 func main() {
 	if err := run(getDefaultAppDeps()); err != nil {
-		log.Fatalf("application failed: %v", err)
+		fatalf("application failed: %v", err)
 	}
 }
 

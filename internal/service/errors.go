@@ -13,10 +13,10 @@ var (
 		"username too short",
 	)
 
-	ErrPasswordTooShort = apperror.New(
+	ErrPasswordTooShortOrTooLong = apperror.New(
 		http.StatusBadRequest,
 		response.CodeInvalidParams,
-		"password too short",
+		"password too short or too long",
 	)
 
 	ErrUsernameAlreadyExists = apperror.New(
