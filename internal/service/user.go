@@ -310,16 +310,3 @@ func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req 
 		return nil
 	})
 }
-
-// TODO 查询所有用户-只有管理员才能够遍历用户
-func (s *UserService) ListUser(ctx context.Context) (model.User, error) {
-	var user model.User
-
-	return user, nil
-}
-
-// TODO 禁用用户-只有管理员才能够禁用用户
-func (s *UserService) UserDisabled(ctx context.Context, userID int64) error {
-
-	return nil
-}

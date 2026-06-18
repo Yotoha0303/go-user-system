@@ -4,22 +4,13 @@
 
 ## 当前状态
 
-- 单元测试与核心业务测试已系统补齐。
-- 当前全量测试覆盖率：`96.2%`。
-- 核心业务包覆盖率基本达到 `100%`：`service`、`handler`、`middleware`、`dao`、`utils`、`response`、`router` 等。
-- 覆盖率流程与测试内容说明：`docs/testing/test-coverage.md`。
-- CI 已覆盖：依赖下载、测试、`go vet`、goose migration 校验、二进制构建、Docker 镜像构建。
-
-## 功能范围
-
-- 用户注册、登录、当前用户查询、昵称修改
-- bcrypt 密码哈希存储，接口不返回 `password_hash`
-- JWT 签发、解析和鉴权中间件
-- 统一响应结构、业务错误码、应用错误封装
-- `/ping`、`/livez`、`/readyz` 健康检查
-- Goose SQL migration 替代 GORM `AutoMigrate`
-- MySQL 集成测试安全保护：测试库名称必须包含 `test`
-- Dockerfile、Docker Compose、本地部署与生产检查文档
+- 已实现用户注册、登录、当前用户查询、昵称修改、密码修改。
+- 使用 JWT 做接口鉴权，密码使用 bcrypt 哈希存储，接口不返回 `password_hash`。
+- 使用统一响应结构、业务错误码和 `internal/apperror` 应用错误模型。
+- 使用 Goose 管理 SQL migration，不使用 GORM `AutoMigrate`。
+- 已接入 `Request ID`、结构化 access log、panic recovery 日志。
+- 已配置 HTTP server 超时、请求 context timeout、数据库连接池和启动时 DB ping timeout。
+- CI 覆盖 golangci-lint、单元测试、race 测试、go vet、migration 校验、二进制构建和 Docker 镜像构建。
 
 ## 技术栈
 
@@ -28,47 +19,38 @@
 | Web 框架 | Gin |
 | ORM | GORM |
 | 数据库 | MySQL |
-| 数据库迁移 | goose |
+| Migration | goose |
 | 认证 | JWT + bcrypt |
 | 配置 | `config.yml` + `.env` + 环境变量覆盖 |
+| 日志 | `log/slog` JSON 结构化日志 |
 | 测试 | Go testing、httptest、fake SQL driver、MySQL integration test |
-| 部署 | Docker、Docker Compose |
-| CI | GitHub Actions |
-
-## 工程化设计
-
-- **依赖注入**：`*gorm.DB` 从 `cmd/main.go` 显式传入 router、handler、service，避免全局 DB。
-- **上下文传递**：HTTP request context 从 handler 传到 service 和 dao，DAO 使用 `WithContext`。
-- **错误处理**：用 `internal/apperror` 封装 HTTP 状态码、业务码、消息和底层 cause。
-- **数据库迁移**：使用 goose 管理 `migrations/*.sql`，CI 校验迁移文件，执行记录存入 `goose_db_version`。
-- **测试可测性**：对启动流程、token 解析、数据库打开、DAO adapter 等位置做可注入设计，方便覆盖失败分支。
-- **部署安全**：容器健康检查、非 root 用户运行、SIGTERM 优雅关闭。
+| 质量门禁 | golangci-lint v2、go test、go test -race、go vet |
+| 部署 | Docker、Docker Compose、GitHub Actions |
 
 ## 项目结构
 
 ```text
-cmd/                    程序入口与启动流程
-config/                 配置加载：config.yml + 环境变量覆盖
+cmd/                    程序入口和启动流程
+config/                 配置加载、默认值、环境变量覆盖和校验
 internal/
   apperror/             应用错误模型
+  auth/                 JWT 签发和解析
   dao/                  数据访问层
-  handler/              HTTP Handler
-  middleware/           JWT 鉴权中间件
+  handler/              HTTP handler 和错误响应映射
+  middleware/           Request ID、Access Log、Recovery、Timeout、Auth
   model/                GORM 模型
   request/              请求 DTO
   response/             统一响应结构和业务错误码
   service/              业务逻辑
   testutil/             MySQL 集成测试工具
-  utils/                JWT 工具
 pkg/
   database/             MySQL / GORM 初始化
 router/                 路由注册
-migrations/             数据库迁移脚本
+migrations/             goose SQL migration
 docs/
-  deploy/               本地 Compose 与生产检查文档
+  deploy/               本地 Compose 与生产部署检查文档
   http/                 REST Client 手动测试文件
   sql/                  本地 SQL 辅助脚本
-  testing/              测试覆盖率与测试流程
 ```
 
 ## 快速启动
@@ -104,7 +86,7 @@ GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parse
 GOOSE_MIGRATION_DIR=./migrations
 ```
 
-启动服务并执行迁移：
+启动服务并执行 migration：
 
 ```bash
 docker compose up -d --build
@@ -120,18 +102,17 @@ curl http://127.0.0.1:8082/livez
 curl http://127.0.0.1:8082/readyz
 ```
 
-更多 Compose 说明：`docs/deploy/local-compose.md`。
+更多说明见 `docs/deploy/local-compose.md`。
 
 ### 本地 Go 启动
 
 前置条件：
 
-- 安装 Go
-- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@latest`
-- 启动 MySQL
-- 创建数据库 `go_user_system`
-- 从 `.env.example` 复制并配置 `.env`
-- 从 `.env.goose.example` 复制并配置 `.env.goose`
+- 安装 Go。
+- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@latest`。
+- 启动 MySQL。
+- 创建数据库 `go_user_system`。
+- 复制并配置 `.env` 和 `.env.goose`。
 
 创建数据库：
 
@@ -149,29 +130,16 @@ make migrate-up
 go run ./cmd
 ```
 
-或使用 Makefile：
-
-```bash
-make migrate-up
-make run
-```
-
 ## 配置说明
 
 | 来源 | 作用 | 是否提交 |
 | --- | --- | --- |
 | `config.yml` | 非敏感默认配置 | 是 |
-| `.env.example` | 本地和 Compose 配置模板 | 是 |
-| `.env` | 本地真实配置 | 否 |
-| `.env.goose.example` | goose 本地迁移配置模板 | 是 |
+| `.env.example` | 本地和 Compose 环境变量模板 | 是 |
+| `.env` | 本地真实环境变量 | 否 |
+| `.env.goose.example` | goose 本地迁移模板 | 是 |
 | `.env.goose` | goose 本地真实迁移配置 | 否 |
 | shell 环境变量 | CI、容器、服务器运行时注入 | 否 |
-
-配置加载规则：
-
-- 启动时从当前工作目录向上查找 `.env` 和 `config.yml`
-- 环境变量优先级高于 `config.yml`
-- `.env`、`.env.*`、`config.local.yml` 不提交到 Git
 
 关键环境变量：
 
@@ -186,13 +154,15 @@ JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_EXPIRE_HOURS=24
 ```
 
-goose 迁移配置：
+配置加载规则：
 
-```dotenv
-GOOSE_DRIVER=mysql
-GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
-GOOSE_MIGRATION_DIR=./migrations
-```
+- 启动时加载 `.env`，再加载 `config.yml`。
+- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS` 可覆盖 `config.yml`。
+- `APP_PORT` 和 `JWT_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
+- `DB_PASSWORD` 和 `JWT_SECRET` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
+- `JWT_SECRET` 长度必须至少 32 个字符。
+
+当前实现会在启动时加载 `.env`。如果生产环境完全依赖平台环境变量而不挂载 `.env`，需要先调整 `config.LoadEnv` 的行为，或者确保部署环境提供可读取的 `.env`。
 
 ## API 概览
 
@@ -205,18 +175,13 @@ GOOSE_MIGRATION_DIR=./migrations
 | `POST` | `/api/v1/auth/login` | 用户登录 | 否 |
 | `GET` | `/api/v1/users/me` | 当前用户信息 | 是 |
 | `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称 | 是 |
+| `PATCH` | `/api/v1/users/me/update/password` | 修改当前用户密码 | 是 |
 
 手动测试文件：`docs/http/test.http`。
 
 ## 数据库迁移
 
-项目不使用 GORM `AutoMigrate`，使用 goose 管理 `migrations/` 下的 SQL migration 文件。
-
-当前 migration 采用 goose 单文件格式：
-
-- 文件名使用顺序编号：`00001_create_users.sql`
-- 文件内使用 `-- +goose Up` 和 `-- +goose Down` 区分正向迁移与回滚
-- 执行记录由 goose 写入 `goose_db_version`
+项目使用 goose 管理 `migrations/*.sql`。当前 migration：
 
 | 文件 | 作用 |
 | --- | --- |
@@ -226,7 +191,6 @@ GOOSE_MIGRATION_DIR=./migrations
 常用命令：
 
 ```bash
-make goose-version
 make migrate-validate
 make migrate-status
 make migrate-version
@@ -234,53 +198,34 @@ make migrate-up
 make migrate-down
 ```
 
-新增表结构变更时：
+新增 migration：
 
 ```bash
 make migrate-create name=your_change
 ```
 
-然后在生成的 SQL 文件中补充 `-- +goose Up` 和 `-- +goose Down` 对应 SQL。
+然后在生成的 SQL 文件里补充 `-- +goose Up` 和 `-- +goose Down`。
 
 ## 测试与质量门禁
 
-默认测试不依赖真实 MySQL：
+本地常用命令：
 
 ```bash
-go test ./...
-go vet ./...
-go build -o bin/go-user-system ./cmd
-```
-
-Makefile：
-
-```bash
+make lint
 make test
-make coverage
-make coverage-html
+make race-test
 make vet
+make coverage
 make build
 ```
 
-覆盖率命令：
+`make lint` 使用 `.golangci.yml`，该文件是 golangci-lint v2 配置。本地需要安装 v2，例如：
 
 ```bash
-go test ./... "-coverprofile=coverage.out" -covermode=atomic
-go tool cover "-func=coverage.out"
-go tool cover "-html=coverage.out" -o coverage.html
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 ```
 
-当前覆盖率：
-
-- 全量语句覆盖率：`96.2%`
-- 建议 CI 覆盖率门槛：`95%`
-- 不建议为了追求绝对 `100%` 强行构造不稳定的 runtime/数据库故障分支
-
-详细测试内容：`docs/testing/test-coverage.md`。
-
-## 集成测试
-
-集成测试需要专用 MySQL 测试库，数据库名必须包含 `test`，避免误删开发库或生产库。
+集成测试需要专用 MySQL 测试库，数据库名必须包含 `test`，避免误删开发库或生产库：
 
 ```sql
 CREATE DATABASE go_user_system_test
@@ -299,40 +244,36 @@ go test ./internal/dao ./internal/service -run Integration -v
 
 CI 文件：`.github/workflows/ci.yml`
 
-流程：
+当前流程：
 
 1. `go mod download`
-2. `go test ./...`
-3. `go vet ./...`
-4. `go install github.com/pressly/goose/v3/cmd/goose@latest`
-5. `goose -dir migrations validate`
-6. `go build -o bin/go-user-system ./cmd`
-7. `docker build -t go-user-system:ci .`
+2. `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`
+3. `golangci-lint run ./...`
+4. `go test ./...`
+5. `go test -race ./...`
+6. `go vet ./...`
+7. `go install github.com/pressly/goose/v3/cmd/goose@latest`
+8. `goose -dir migrations validate`
+9. `go build -o bin/go-user-system ./cmd`
+10. `docker build -t go-user-system:ci .`
 
-## 部署检查
+## 生产部署检查
 
 生产部署前至少确认：
 
-- `JWT_SECRET` 使用 32 位以上强随机字符串
-- 生产数据库不使用 MySQL `root` 用户连接业务库
-- `/readyz` 返回 200
-- migration 已执行，`goose_db_version` 中存在版本记录
-- 镜像以非 root 用户运行
-- SIGTERM 能触发服务优雅关闭
+- `JWT_SECRET` 使用 32 位以上强随机字符串。
+- `DB_PASSWORD` 不使用默认值。
+- 生产数据库不使用 MySQL `root` 账号连接业务库。
+- `make lint`、`make test`、`make race-test`、`make vet` 通过。
+- `make migrate-validate` 通过，并已在目标数据库执行 migration。
+- `/readyz` 返回 200。
+- 应用日志没有打印密码、JWT secret、access token、password hash。
+- 容器以非 root 用户运行。
+- SIGTERM 能触发优雅关闭。
 
-完整清单：`docs/deploy/production-checklist.md`。
+完整清单见 `docs/deploy/production-checklist.md`。
 
 ## 常见问题
-
-### 找不到 `.env`
-
-从项目根目录运行：
-
-```bash
-go run ./cmd
-```
-
-或确认 `.env` 位于项目根目录，且保存为 UTF-8。
 
 ### JWT 初始化失败
 
@@ -354,3 +295,7 @@ docker compose ps
 docker compose logs mysql
 docker compose logs app
 ```
+
+### `golangci-lint` 报配置版本不匹配
+
+`.golangci.yml` 是 v2 配置。如果本地是 v1，会看到类似“configuration file for golangci-lint v2 with golangci-lint v1”的错误。安装 v2 后再运行 `make lint`。

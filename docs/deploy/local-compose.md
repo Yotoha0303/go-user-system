@@ -4,24 +4,27 @@
 
 ## 1. 前置条件
 
-- 已安装 Docker Desktop，或 Docker Engine + Docker Compose
-- Docker 能拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`
-- 已复制 `.env.example` 为 `.env`
-- `.env` 中已设置 `DB_PASSWORD` 和 `JWT_SECRET`
-- 本地端口 `8082`、`3306` 未被占用
+- 已安装 Docker Desktop，或 Docker Engine + Docker Compose。
+- Docker 可以拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`。
+- 本地端口 `8082` 和 `3306` 未被占用。
+- 已复制 `.env.example` 为 `.env`。
+- 已复制 `.env.goose.example` 为 `.env.goose`。
+- `.env` 中已设置 `DB_PASSWORD` 和 `JWT_SECRET`。
 
-## 2. 启动服务
+## 2. 准备配置
 
-首次启动前：
+复制模板：
 
 ```bash
 cp .env.example .env
+cp .env.goose.example .env.goose
 ```
 
 Windows PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
+Copy-Item .env.goose.example .env.goose
 ```
 
 修改 `.env`：
@@ -31,14 +34,22 @@ DB_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 ```
 
-启动：
+修改 `.env.goose`，确保密码和 `.env` 一致：
+
+```dotenv
+GOOSE_DRIVER=mysql
+GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
+GOOSE_MIGRATION_DIR=./migrations
+```
+
+## 3. 启动服务
 
 ```bash
 docker compose up -d --build
 make migrate-up
 ```
 
-或：
+或使用 Makefile：
 
 ```bash
 make compose-up
@@ -47,23 +58,23 @@ make migrate-up
 
 以上命令会：
 
-- 构建 Go 应用镜像
-- 启动 MySQL `8.4`
-- 创建数据库 `go_user_system`
-- 等待 MySQL healthcheck 通过
-- 启动应用容器
-- 使用 goose 执行 `migrations/*.sql`
+- 构建 Go 应用镜像。
+- 启动 MySQL `8.4`。
+- 创建数据库 `go_user_system`。
+- 等待 MySQL healthcheck 通过。
+- 启动应用容器。
+- 使用 goose 执行 `migrations/*.sql`。
 
-## 3. 查看状态
+## 4. 查看状态和日志
 
 ```bash
 docker compose ps
 ```
 
-期望结果：
+期望状态：
 
-- `go-user-system-mysql` 为 `healthy`
-- `go-user-system-app` 为 `running` 或 `healthy`
+- `go-user-system-mysql` 为 `healthy`。
+- `go-user-system-app` 为 `running` 或 `healthy`。
 
 查看日志：
 
@@ -72,7 +83,7 @@ docker compose logs -f app
 docker compose logs -f mysql
 ```
 
-## 4. 验证服务
+## 5. 验证服务
 
 ```bash
 curl http://127.0.0.1:8082/ping
@@ -82,12 +93,12 @@ curl http://127.0.0.1:8082/readyz
 
 `/readyz` 返回 200 表示应用进程已启动，且数据库可连接。
 
-完整接口验证可使用：
+完整接口验证可以使用：
 
 - `docs/http/test.http`
 - README 中的 API 概览
 
-## 5. MySQL 连接信息
+## 6. MySQL 连接信息
 
 | 配置项 | 值 |
 | --- | --- |
@@ -106,7 +117,24 @@ DB_PORT=3306
 
 原因：Compose 会创建内部 DNS，`mysql` 是数据库服务名。
 
-## 6. 停止服务
+## 7. 执行 migration
+
+常用命令：
+
+```bash
+make migrate-validate
+make migrate-status
+make migrate-version
+make migrate-up
+make migrate-down
+```
+
+当前 migration 文件：
+
+- `migrations/00001_create_users.sql`
+- `migrations/00002_add_user_audit_fields.sql`
+
+## 8. 停止服务
 
 停止并删除容器：
 
@@ -122,7 +150,7 @@ docker compose down -v
 
 注意：`docker compose down -v` 会删除本地 MySQL 数据卷，执行前确认数据可以丢弃。
 
-## 7. 常见问题
+## 9. 常见问题
 
 ### 端口被占用
 
@@ -143,14 +171,15 @@ ports:
 
 问题：应用日志出现数据库连接失败。
 
-原因：常见原因包括 MySQL 尚未健康、`.env` 密码不一致、`DB_HOST` 配置错误。
+原因：常见原因包括 MySQL 尚未健康、`.env` 密码不一致、`DB_HOST` 配置错误、migration 未执行。
 
-修改建议：依次检查服务状态、MySQL 日志、应用日志和 `.env`。
+修改建议：
 
 ```bash
 docker compose ps
 docker compose logs mysql
 docker compose logs app
+make migrate-status
 ```
 
 ### 修改代码后容器行为没有变化
@@ -164,3 +193,11 @@ docker compose logs app
 ```bash
 docker compose up -d --build
 ```
+
+### `/readyz` 不是 200
+
+问题：`/readyz` 返回失败。
+
+原因：应用可以启动但数据库不可访问，或数据库连接池初始化失败。
+
+修改建议：先看 app 和 mysql 日志，再确认 `.env`、`.env.goose`、migration 状态。
