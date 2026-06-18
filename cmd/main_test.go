@@ -105,7 +105,9 @@ func baseRunDeps(t *testing.T) appDeps {
 	t.Helper()
 
 	return appDeps{
-		loadEnv: func() {},
+		loadEnv: func() error {
+			return nil
+		},
 		loadConfig: func(path string) (*config.Config, error) {
 			return &config.Config{
 				Server: config.ServerConfig{Port: 8080},

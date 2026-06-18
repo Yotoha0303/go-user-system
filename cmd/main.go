@@ -25,7 +25,7 @@ type appServer interface {
 }
 
 type appDeps struct {
-	loadEnv         func()
+	loadEnv         func() error
 	loadConfig      func(path string) (*config.Config, error)
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
 	newTokenManager func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error)
@@ -74,7 +74,10 @@ func main() {
 }
 
 func run(deps appDeps) error {
-	deps.loadEnv()
+
+	if err := deps.loadEnv(); err != nil {
+		return err
+	}
 
 	cfg, err := deps.loadConfig("config.yml")
 	if err != nil {
@@ -100,6 +103,8 @@ func run(deps appDeps) error {
 
 	slog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
+	logger := slog
+
 	tokenManager, err := deps.newTokenManager(
 		os.Getenv("JWT_SECRET"),
 		"go-user-system",
@@ -122,7 +127,7 @@ func run(deps appDeps) error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("server starting: addr=%s", addr)
+		logger.Info("server starting:", "addr", addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 			return
@@ -142,7 +147,7 @@ func run(deps appDeps) error {
 		return nil
 	}
 
-	log.Printf("server shutting down")
+	logger.Info("server shutting down")
 	if deps.shutdownTimeout == 0 {
 		deps.shutdownTimeout = 10 * time.Second
 	}
@@ -152,6 +157,6 @@ func run(deps appDeps) error {
 	if err := server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown failed: %w", err)
 	}
-	log.Println("server stopped")
+	logger.Info("server stopped")
 	return nil
 }

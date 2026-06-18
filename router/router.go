@@ -60,7 +60,6 @@ func registerUsersRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler, 
 	{
 		users.GET("/me", userHandler.MeHandler)
 		users.PUT("/me/profile", userHandler.UpdateProfileHandler)
-		users.PUT("/me/login/out", userHandler.LoginOutHandler)
 		users.PATCH("/me/update/password", userHandler.UpdateUserPasswordHandler)
 	}
 }

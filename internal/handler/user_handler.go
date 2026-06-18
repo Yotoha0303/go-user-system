@@ -44,7 +44,7 @@ func (h *UserHandler) RegisterHandler(c *gin.Context) {
 	}
 
 	if err := h.userService.Register(c.Request.Context(), req); err != nil {
-		handleError(c, err, response.CodeRegisterFailed, "注册失败")
+		handleError(c, err, response.CodeRegisterFailed, "register failed")
 		return
 	}
 
@@ -225,9 +225,5 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, nil)
-}
-
-func (h *UserHandler) LoginOutHandler(c *gin.Context) {
 	response.Success(c, nil)
 }

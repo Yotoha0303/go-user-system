@@ -154,17 +154,25 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func LoadEnv() {
-	loadEnvFile(".env")
+func LoadEnv() error {
+	if err := loadEnvFile(".env"); err != nil {
+		return fmt.Errorf("load env file failed: %w", err)
+	}
+	return nil
 }
 
-func loadEnvFile(name string) {
+func loadEnvFile(name string) error {
 	if path, ok := findFileUpward(name); ok {
-		_ = godotenv.Load(path)
-		return
+		if err := godotenv.Load(path); err != nil {
+			return err
+		}
+		return nil
 	}
 
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func Load(path string) (*Config, error) {
@@ -186,7 +194,10 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("%w: %w", ErrUnmarshalConfigFileDataFailed, err)
 	}
 
-	applyEnvOverrides(&cfg)
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return nil, err
+	}
+
 	applyDefaults(&cfg)
 
 	if err = cfg.Validate(); err != nil {
@@ -262,11 +273,13 @@ func findFileUpwardFrom(startDir string, name string) (string, bool) {
 	}
 }
 
-func applyEnvOverrides(cfg *Config) {
+func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("APP_PORT"); v != "" {
-		if port, err := strconv.Atoi(v); err == nil {
-			cfg.Server.Port = port
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid APP_PORT: %w", err)
 		}
+		cfg.Server.Port = port
 	}
 
 	if v := os.Getenv("DB_HOST"); v != "" {
@@ -283,10 +296,13 @@ func applyEnvOverrides(cfg *Config) {
 	}
 
 	if v := os.Getenv("JWT_EXPIRE_HOURS"); v != "" {
-		if hours, err := strconv.Atoi(v); err == nil {
-			cfg.JWT.ExpireHours = hours
+		hours, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid JWT_EXPIRE_HOURS: %w", err)
 		}
+		cfg.JWT.ExpireHours = hours
 	}
+	return nil
 }
 
 func applyDefaults(cfg *Config) {

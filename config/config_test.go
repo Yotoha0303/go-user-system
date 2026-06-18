@@ -380,7 +380,10 @@ func TestLoadEnvFindsEnvFromParentDirectory(t *testing.T) {
 		t.Fatalf("chdir failed: %v", err)
 	}
 
-	LoadEnv()
+	err = LoadEnv()
+	if err != nil {
+		t.Fatalf("expected env loaded success,got %s", err)
+	}
 
 	if got := os.Getenv(envKey); got != "loaded_from_parent" {
 		t.Fatalf("expected env loaded_from_parent, got %s", got)
@@ -388,7 +391,11 @@ func TestLoadEnvFindsEnvFromParentDirectory(t *testing.T) {
 }
 
 func TestLoadEnvFileFallsBackWhenFileIsMissing(t *testing.T) {
-	loadEnvFile("definitely_missing_env_file_for_test")
+	err := loadEnvFile("definitely_missing_env_file_for_test")
+	if err == nil {
+		t.Fatalf("expected env loaded failed,got %s", err)
+	}
+
 }
 
 func TestFindFileUpwardUsesSourceDirectoryWhenWorkingDirectoryIsOutsideProject(t *testing.T) {

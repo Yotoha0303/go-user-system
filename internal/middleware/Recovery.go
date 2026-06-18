@@ -34,7 +34,7 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 						c,
 						http.StatusInternalServerError,
 						response.CodeInternalError,
-						"服务器内部错误",
+						"server error",
 					)
 				}
 				c.Abort()

@@ -58,5 +58,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if dsn == "" {
+		return nil, fmt.Errorf("database dsn not found")
+	}
 	return openMySQL(cfg, dsn)
 }
