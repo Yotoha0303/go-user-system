@@ -44,6 +44,8 @@ GOOSE_MIGRATION_DIR=./migrations
 
 ## 3. 启动服务
 
+应用启动不会自动执行 migration。Compose 启动容器后，需要手动执行 `make migrate-up`。
+
 ```bash
 docker compose up -d --build
 make migrate-up
@@ -63,7 +65,7 @@ make migrate-up
 - 创建数据库 `go_user_system`。
 - 等待 MySQL healthcheck 通过。
 - 启动应用容器。
-- 使用 goose 执行 `migrations/*.sql`。
+- 通过 `make migrate-up` 使用 goose 执行 `migrations/*.sql`。
 
 ## 4. 查看状态和日志
 

@@ -8,6 +8,7 @@ import (
 	"go-user-system/internal/response"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"gorm.io/driver/mysql"
@@ -17,6 +18,7 @@ import (
 const healthSQLDriverName = "go_user_system_health_test"
 
 var registerHealthSQLDriverOnce sync.Once
+var healthSQLPingCount atomic.Int32
 
 type healthSQLDriver struct{}
 
@@ -45,6 +47,7 @@ func (c *healthSQLConn) Begin() (driver.Tx, error) {
 }
 
 func (c *healthSQLConn) Ping(ctx context.Context) error {
+	healthSQLPingCount.Add(1)
 	return c.pingErr
 }
 
@@ -160,6 +163,7 @@ func TestReadyzHandlerFailsWhenDatabasePingFails(t *testing.T) {
 }
 
 func TestReadyzHandlerReturnsReadyWhenDatabasePings(t *testing.T) {
+	healthSQLPingCount.Store(0)
 	healthHandler := NewHealthHandler(openHealthGormDB(t, "ready"))
 
 	recorder := performJSONRequest(healthHandler.ReadyzHandler, http.MethodGet, "/readyz", "")
@@ -170,5 +174,8 @@ func TestReadyzHandlerReturnsReadyWhenDatabasePings(t *testing.T) {
 	}
 	if body.Code != response.CodeSuccess {
 		t.Fatalf("expected code %d, got %d", response.CodeSuccess, body.Code)
+	}
+	if got := healthSQLPingCount.Load(); got != 1 {
+		t.Fatalf("expected database ping once, got %d", got)
 	}
 }

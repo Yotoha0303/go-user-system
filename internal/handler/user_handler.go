@@ -193,7 +193,7 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 				response.CodeTokenUserMissing,
 				"没有找到用户信息",
 			),
-			response.CodeUpdateNicknameFailed,
+			response.CodeTokenUserMissing,
 			"更改昵称失败",
 		)
 		return
@@ -208,7 +208,7 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 				response.CodeTokenUserInvalid,
 				"无效的用户信息",
 			),
-			response.CodeUpdateNicknameFailed,
+			response.CodeTokenUserInvalid,
 			"更改昵称失败",
 		)
 		return
@@ -221,7 +221,7 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 	}
 
 	if err := h.userService.UpdateUserPassword(c, userID, req); err != nil {
-		handleError(c, err, http.StatusInternalServerError, "修改密码失败")
+		handleError(c, err, response.CodeUpdateUserPasswordFailed, "修改密码失败")
 		return
 	}
 

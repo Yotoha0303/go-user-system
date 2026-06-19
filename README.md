@@ -86,7 +86,7 @@ GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parse
 GOOSE_MIGRATION_DIR=./migrations
 ```
 
-启动服务并执行 migration：
+启动服务，然后手动执行 migration。应用启动流程不会自动执行 migration，必须显式运行 `make migrate-up`：
 
 ```bash
 docker compose up -d --build
@@ -129,6 +129,8 @@ go mod download
 make migrate-up
 go run ./cmd
 ```
+
+注意：`cmd/main.go` 只负责加载配置、初始化数据库连接、初始化 JWT 和启动 HTTP server，不会自动执行 migration。
 
 ## 配置说明
 
@@ -182,6 +184,8 @@ JWT_EXPIRE_HOURS=24
 ## 数据库迁移
 
 项目使用 goose 管理 `migrations/*.sql`。当前 migration：
+
+应用启动不会自动执行 migration。部署或本地启动前需要通过 `make migrate-up` 或等价 goose 命令显式执行。
 
 | 文件 | 作用 |
 | --- | --- |
