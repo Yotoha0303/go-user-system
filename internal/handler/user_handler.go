@@ -220,7 +220,7 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.UpdateUserPassword(c, userID, req); err != nil {
+	if err := h.userService.UpdateUserPassword(c.Request.Context(), userID, req); err != nil {
 		handleError(c, err, response.CodeUpdateUserPasswordFailed, "修改密码失败")
 		return
 	}

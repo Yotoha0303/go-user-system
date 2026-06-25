@@ -22,7 +22,9 @@ import (
 
 const mainSQLDriverName = "go_user_system_main_test"
 
-var registerMainSQLDriverOnce sync.Once
+var (
+	registerMainSQLDriverOnce sync.Once
+)
 
 type mainSQLDriver struct{}
 
@@ -119,7 +121,7 @@ func baseRunDeps(t *testing.T) appDeps {
 		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
 			return &auth.TokenManager{}, nil
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
 			return http.NewServeMux()
 		},
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
@@ -139,7 +141,7 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.shutdownTimeout != 10*time.Second {
 		t.Fatalf("expected shutdown timeout 10s, got %s", deps.shutdownTimeout)
 	}
-	if deps.setupRouter(nil, nil, 0, &auth.TokenManager{}) == nil {
+	if deps.setupRouter(nil, nil, &auth.TokenManager{}) == nil {
 		t.Fatal("expected default router")
 	}
 	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {

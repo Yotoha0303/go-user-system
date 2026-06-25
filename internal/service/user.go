@@ -211,7 +211,7 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 
 // TODO 修改用户密码后，需要禁用上一次登录时的 access_token ，防止密码被再次修改
 func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		if req.OldPassword == req.NewPassword {
 			return ErrUserPasswordNoDifference

@@ -31,5 +31,6 @@ var (
 
 	CodeDatabaseNotInitialized = 5002
 
-	CodeInternalError = 6001
+	CodeInternalError  = 6001
+	CodeRequestTimeout = 6002
 )

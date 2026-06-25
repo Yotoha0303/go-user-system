@@ -6,19 +6,17 @@ import (
 	"go-user-system/internal/middleware"
 	"go-user-system/internal/service"
 	"log/slog"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) *gin.Engine {
+func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) *gin.Engine {
 	r := gin.New()
 
 	r.Use(
 		middleware.RequestID(),
 		middleware.AccessLog(logger),
-		middleware.TimeoutMiddleware(timeout),
 		middleware.Recovery(logger),
 	)
 

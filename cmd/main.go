@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-user-system/config"
 	"go-user-system/internal/auth"
+	"go-user-system/internal/middleware"
 	"go-user-system/pkg/database"
 	"go-user-system/router"
 	"log"
@@ -29,7 +30,7 @@ type appDeps struct {
 	loadConfig      func(path string) (*config.Config, error)
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
 	newTokenManager func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error)
-	setupRouter     func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler
+	setupRouter     func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler
 	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
 	shutdownTimeout time.Duration
@@ -43,13 +44,13 @@ func defaultAppDeps() appDeps {
 		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
 			return auth.NewTokenManager(secret, issuer, ttl)
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, timeout time.Duration, tokenManager *auth.TokenManager) http.Handler {
-			return router.SetupRouter(db, logger, timeout, tokenManager)
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
+			return router.SetupRouter(db, logger, tokenManager)
 		},
-		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
+		newServer: func(addr string, router http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
 				Addr:              addr,
-				Handler:           handler,
+				Handler:           middleware.TimeoutHandler(router, cfg.Timeout),
 				ReadTimeout:       cfg.ReadTimeOut,
 				WriteTimeout:      cfg.WriteTimeout,
 				IdleTimeout:       cfg.IdleTimeout,
@@ -115,7 +116,7 @@ func run(deps appDeps) error {
 		return fmt.Errorf("new token manager failed: %w", err)
 	}
 
-	r := deps.setupRouter(db, slog, cfg.HttpServer.Server.Timeout, tokenManager)
+	r := deps.setupRouter(db, slog, tokenManager)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

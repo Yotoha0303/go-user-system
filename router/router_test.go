@@ -23,7 +23,7 @@ func TestPingReturnsSuccess(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 
-	SetupRouter(nil, testLogger(), 0, &auth.TokenManager{}).ServeHTTP(recorder, request)
+	SetupRouter(nil, testLogger(), &auth.TokenManager{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
@@ -44,7 +44,7 @@ func TestReadyzFailsWhenDatabaseIsNotInitialized(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 
-	SetupRouter(nil, testLogger(), 0, &auth.TokenManager{}).ServeHTTP(recorder, request)
+	SetupRouter(nil, testLogger(), &auth.TokenManager{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)
