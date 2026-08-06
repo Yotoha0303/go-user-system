@@ -4,9 +4,11 @@
 
 ## 当前状态
 
-- 已实现用户注册、登录、当前用户查询、昵称修改、密码修改。
-- 使用 JWT 做接口鉴权，密码使用 bcrypt 哈希存储，接口不返回 `password_hash`。
+- 已实现用户注册、登录、双 Token 刷新、登出、当前用户查询、昵称修改、密码修改。
+- 使用 **JWT Access/Refresh 双 Token** 做接口鉴权，**Refresh Token 存储哈希并支持轮换、吊销**（已实现 Rotation）。
+- 基于 RBAC 五表模型实现角色、权限、用户角色、角色权限，并通过 Gin 中间件做接口级鉴权。
 - 使用统一响应结构、业务错误码和 `internal/apperror` 应用错误模型。
+- 使用 `swaggo/swag` 注解生成 Swagger JSON、YAML 文档，并通过 `gin-swagger` 提供 `/swagger/index.html` 文档入口。
 - 使用 Goose 管理 SQL migration，不使用 GORM `AutoMigrate`。
 - 已接入 `Request ID`、结构化 access log、panic recovery 日志。
 - 已配置 HTTP server 超时、请求 context timeout、数据库连接池和启动时 DB ping timeout。
@@ -20,7 +22,9 @@
 | ORM | GORM |
 | 数据库 | MySQL |
 | Migration | goose |
-| 认证 | JWT + bcrypt |
+| 认证 | JWT Access/Refresh Token + bcrypt |
+| 权限 | RBAC 五表模型 |
+| 接口文档 | swaggo / gin-swagger |
 | 配置 | `config.yml` + `.env` + 环境变量覆盖 |
 | 日志 | `log/slog` JSON 结构化日志 |
 | 测试 | Go testing、httptest、fake SQL driver、MySQL integration test |
@@ -39,6 +43,7 @@ internal/
   handler/              HTTP handler 和错误响应映射
   middleware/           Request ID、Access Log、Recovery、Timeout、Auth
   model/                GORM 模型
+  repository/           Refresh Token、RBAC Repository
   request/              请求 DTO
   response/             统一响应结构和业务错误码
   service/              业务逻辑
@@ -51,6 +56,11 @@ docs/
   deploy/               本地 Compose 与生产部署检查文档
   http/                 REST Client 手动测试文件
   sql/                  本地 SQL 辅助脚本
+  docs.go               swaggo 生成文件
+  swagger.json          Swagger JSON 文档
+  swagger.yaml          Swagger YAML 文档
+  backend-callgraph.gv  go-callvis DOT 调用图
+  backend-callgraph.svg go-callvis SVG 调用图
 ```
 
 ## 快速启动
@@ -76,6 +86,8 @@ Copy-Item .env.goose.example .env.goose
 ```dotenv
 DB_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 ```
 
 修改 `.env.goose`，确保数据库密码与 `.env` 一致：
@@ -154,17 +166,19 @@ DB_PASSWORD=your_mysql_password
 DB_NAME=go_user_system
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_EXPIRE_HOURS=24
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 ```
 
 配置加载规则：
 
 - 启动时加载 `.env`，再加载 `config.yml`。
-- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS` 可覆盖 `config.yml`。
-- `APP_PORT` 和 `JWT_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
+- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`、`JWT_REFRESH_TOKEN_EXPIRE_HOURS` 可覆盖 `config.yml`。
+- `APP_PORT`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES` 和 `JWT_REFRESH_TOKEN_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
 - `DB_PASSWORD` 和 `JWT_SECRET` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
 - `JWT_SECRET` 长度必须至少 32 个字符。
 
-当前实现会在启动时加载 `.env`。如果生产环境完全依赖平台环境变量而不挂载 `.env`，需要先调整 `config.LoadEnv` 的行为，或者确保部署环境提供可读取的 `.env`。
+`.env` 是可选的本地开发文件。容器和生产环境可以只通过运行时环境变量注入配置，不需要挂载 `.env`。
 
 ## API 概览
 
@@ -174,12 +188,47 @@ JWT_EXPIRE_HOURS=24
 | `GET` | `/livez` | 进程存活检查 | 否 |
 | `GET` | `/readyz` | 服务就绪检查，包含 DB ping | 否 |
 | `POST` | `/api/v1/auth/register` | 用户注册 | 否 |
-| `POST` | `/api/v1/auth/login` | 用户登录 | 否 |
-| `GET` | `/api/v1/users/me` | 当前用户信息 | 是 |
-| `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称 | 是 |
-| `PATCH` | `/api/v1/users/me/update/password` | 修改当前用户密码 | 是 |
+| `POST` | `/api/v1/auth/login` | 返回 Access Token，并通过 HttpOnly Cookie 写入 Refresh Token | 否 |
+| `POST` | `/api/v1/auth/refresh` | 使用 Refresh Cookie 轮换双 Token | 否 |
+| `POST` | `/api/v1/auth/logout` | 吊销 Refresh Token 并清除 Cookie | 否 |
+| `GET` | `/api/v1/users/me` | 当前用户信息，需要 `profile:read` | 是 |
+| `GET` | `/api/v1/users/me/authorization` | 当前用户角色码与权限码 | 是 |
+| `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称，需要 `profile:update` | 是 |
+| `PATCH` | `/api/v1/users/me/update/password` | 修改当前用户密码，需要 `password:update` | 是 |
+| `GET` | `/api/v1/admin/roles` | 查询角色列表，需要 `admin:roles:read` | 是 |
+| `GET` | `/api/v1/admin/permissions` | 查询权限列表，需要 `admin:permissions:read` | 是 |
+| `PUT` | `/api/v1/admin/users/:id/roles` | 给用户分配角色，需要 `admin:user_roles:update` | 是 |
+
+Swagger 文档：
+
+- 页面入口：`/swagger/index.html`
+- JSON：`/swagger/doc.json`
+- YAML：`/swagger/swagger.yaml`
+- 重新生成：`make swagger`
 
 手动测试文件：`docs/http/test.http`。
+
+后端调用图：
+
+- SVG：`docs/backend-callgraph.svg`
+- DOT 源文件：`docs/backend-callgraph.gv`
+- 重新生成：`make callvis`
+- 交互查看：运行 `make callvis-serve`，访问 `http://127.0.0.1:7878/`。
+- 分析方式：RTA，按 package/type 分组，仅保留 `go-user-system` 模块内调用。
+
+`make callvis` 固定使用 `go-callvis v0.7.1`，首次执行会下载工具并在 `.cache/go-callvis` 建立独立 Go 构建缓存。当前模块路径不含域名，不能给命令增加 `-nostd`，否则该版本会把项目包误判为标准库并生成空图。
+
+RBAC 初始化规则：
+
+- 第一个注册用户会自动绑定 `admin` 和 `user` 角色，用于系统初始化。
+- 后续注册用户默认绑定 `user` 角色。
+- 管理员可通过 `/api/v1/admin/users/:id/roles` 调整用户角色。
+
+浏览器端认证约定：
+
+- Access Token 只保存在前端内存状态中，通过 `Authorization: Bearer <token>` 发送。
+- Refresh Token 仅存储在 `HttpOnly`、`SameSite=Lax` Cookie 中，不出现在登录和刷新响应体。
+- `/api/v1/auth/refresh` 和 `/api/v1/auth/logout` 仍允许可选 JSON 请求体，便于非浏览器客户端调用。
 
 ## 数据库迁移
 
@@ -191,6 +240,9 @@ JWT_EXPIRE_HOURS=24
 | --- | --- |
 | `migrations/00001_create_users.sql` | 创建 / 回滚 `users` 表 |
 | `migrations/00002_add_user_audit_fields.sql` | 增加 / 回滚 `last_login_at`、`deleted_at` |
+| `migrations/00003_create_refresh_tokens.sql` | 创建 / 回滚 `refresh_tokens` 表 |
+| `migrations/00004_create_rbac_tables.sql` | 创建 / 回滚 RBAC 四表并写入默认角色权限 |
+| `migrations/00005_backfill_user_roles.sql` | 给既有用户补 `user` 角色，并给最早用户补 `admin` 角色 |
 
 常用命令：
 
@@ -286,9 +338,11 @@ CI 文件：`.github/workflows/ci.yml`
 ```dotenv
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_EXPIRE_HOURS=24
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
+JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 ```
 
-`JWT_SECRET` 不能为空，长度不能少于 32 个字符。
+`JWT_SECRET` 不能为空，长度不能少于 32 个字符。Access Token 和 Refresh Token 的过期配置必须是正整数。
 
 ### Compose 中应用连接不上数据库
 

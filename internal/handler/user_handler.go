@@ -20,7 +20,7 @@ import (
 
 const (
 	refreshTokenCookieName = "refresh_token"
-	refreshTokenCookiePath = "/api/v1/auth"
+	refreshTokenCookiePath = "/api/v1/auth" // #nosec G101
 )
 
 type UserService interface {

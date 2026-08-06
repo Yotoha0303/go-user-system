@@ -1,6 +1,6 @@
 .env
 .env.*
-!.env.example
+!.env.*.example
 
 config.local.yml
 
@@ -8,6 +8,7 @@ bin/*
 !bin/.gitkeep
 dist/
 tmp/
+.cache/
 logs/
 *.log
 
