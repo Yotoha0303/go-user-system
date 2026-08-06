@@ -1,15 +1,19 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var (
 	ErrAccessTokenInvalid   = errors.New("invalid access token")
+	ErrRefreshTokenInvalid  = errors.New("invalid refresh token")
 	ErrJWTSecretTooShort    = errors.New("jwt secret must be at least 32 characters")
 	ErrJWTIssuerEmpty       = errors.New("jwt issuer empty")
 	ErrJWTExpireInvalid     = errors.New("jwt expire invalid")
@@ -17,25 +21,53 @@ var (
 	ErrTokenIssuedAtMissing = errors.New("jwt token issued at missing")
 	ErrTokenUserInvalid     = errors.New("jwt token user invalid")
 	ErrTokenUsernameInvalid = errors.New("jwt token user name invalid")
+	ErrTokenTypeInvalid     = errors.New("jwt token type invalid")
+	ErrTokenJTIInvalid      = errors.New("jwt token jti invalid")
+)
+
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
 )
 
 type TokenManager struct {
-	secret []byte
-	issuer string
-	ttl    time.Duration
-	now    func() time.Time
+	secret     []byte
+	issuer     string
+	accessTTL  time.Duration
+	refreshTTL time.Duration
+	now        func() time.Time
 }
 
 type UserClaims struct {
-	Username string `json:"username"`
-	UserID   int64  `json:"user_id"`
+	Username  string `json:"username"`
+	UserID    int64  `json:"user_id"`
+	TokenType string `json:"token_type"`
+	JTI       string `json:"-"`
 	jwt.RegisteredClaims
 }
 
+type IssuedToken struct {
+	Token     string
+	JTI       string
+	TokenType string
+	ExpiresAt time.Time
+	ExpiresIn int64
+}
+
+// NewTokenManager creates a manager with access TTL and refresh TTL = 7x access TTL.
 func NewTokenManager(
 	secret string,
 	issuer string,
 	ttl time.Duration,
+) (*TokenManager, error) {
+	return NewTokenManagerWithTTL(secret, issuer, ttl, ttl*7)
+}
+
+func NewTokenManagerWithTTL(
+	secret string,
+	issuer string,
+	accessTTL time.Duration,
+	refreshTTL time.Duration,
 ) (*TokenManager, error) {
 	secret = strings.TrimSpace(secret)
 
@@ -47,38 +79,99 @@ func NewTokenManager(
 		return nil, ErrJWTIssuerEmpty
 	}
 
-	if ttl <= 0 {
+	if accessTTL <= 0 || refreshTTL <= 0 {
 		return nil, ErrJWTExpireInvalid
 	}
 
 	return &TokenManager{
-		secret: []byte(secret),
-		issuer: issuer,
-		ttl:    ttl,
-		now:    time.Now,
+		secret:     []byte(secret),
+		issuer:     issuer,
+		accessTTL:  accessTTL,
+		refreshTTL: refreshTTL,
+		now:        time.Now,
 	}, nil
 }
 
-func (m *TokenManager) GenerateAccessToken(
-	userID int64,
-	username string,
-) (string, error) {
+func (m *TokenManager) GenerateAccessToken(userID int64, username string) (string, error) {
+	issuedToken, err := m.generateToken(userID, username, TokenTypeAccess, m.accessTTL)
+	if err != nil {
+		return "", err
+	}
+	return issuedToken.Token, nil
+}
+
+func (m *TokenManager) GenerateAccessTokenIssue(userID int64, username string) (*IssuedToken, error) {
+	return m.generateToken(userID, username, TokenTypeAccess, m.accessTTL)
+}
+
+func (m *TokenManager) GenerateRefreshToken(userID int64, username string) (*IssuedToken, error) {
+	return m.generateToken(userID, username, TokenTypeRefresh, m.refreshTTL)
+}
+
+func (m *TokenManager) AccessTokenTTL() time.Duration {
+	return m.accessTTL
+}
+
+func (m *TokenManager) RefreshTokenTTL() time.Duration {
+	return m.refreshTTL
+}
+
+func (m *TokenManager) generateToken(userID int64, username string, tokenType string, ttl time.Duration) (*IssuedToken, error) {
+	now := m.now()
+	expiresAt := now.Add(ttl)
+	jti := uuid.NewString()
 
 	claims := UserClaims{
-		UserID:   userID,
-		Username: username,
+		UserID:    userID,
+		Username:  username,
+		TokenType: tokenType,
+		JTI:       jti,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
-			IssuedAt:  jwt.NewNumericDate(m.now()),
-			ExpiresAt: jwt.NewNumericDate(m.now().Add(m.ttl)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			ID:        jti,
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secret)
+	tokenString, err := token.SignedString(m.secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &IssuedToken{
+		Token:     tokenString,
+		JTI:       jti,
+		TokenType: tokenType,
+		ExpiresAt: expiresAt,
+		ExpiresIn: int64(ttl.Seconds()),
+	}, nil
 }
 
 func (m *TokenManager) ParseAccessToken(tokenString string) (*UserClaims, error) {
+	claims, err := m.parseToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeAccess {
+		return nil, ErrAccessTokenInvalid
+	}
+	return claims, nil
+}
+
+func (m *TokenManager) ParseRefreshToken(tokenString string) (*UserClaims, error) {
+	claims, err := m.parseToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeRefresh {
+		return nil, ErrRefreshTokenInvalid
+	}
+	return claims, nil
+}
+
+func (m *TokenManager) parseToken(tokenString string) (*UserClaims, error) {
 	claims := &UserClaims{}
 
 	token, err := jwt.ParseWithClaims(
@@ -114,6 +207,23 @@ func (m *TokenManager) ParseAccessToken(tokenString string) (*UserClaims, error)
 		return nil, ErrTokenUsernameInvalid
 	}
 
+	if claims.TokenType != TokenTypeAccess && claims.TokenType != TokenTypeRefresh {
+		return nil, ErrTokenTypeInvalid
+	}
+
+	// JTI is stored in standard claim ID; custom field is not serialized.
+	if strings.TrimSpace(claims.JTI) == "" {
+		claims.JTI = claims.ID
+	}
+
+	if strings.TrimSpace(claims.JTI) == "" || claims.ID == "" {
+		return nil, ErrTokenJTIInvalid
+	}
+
+	if claims.ID != claims.JTI {
+		return nil, ErrTokenJTIInvalid
+	}
+
 	return claimsFromToken(token)
 }
 
@@ -124,4 +234,10 @@ func claimsFromToken(token *jwt.Token) (*UserClaims, error) {
 	}
 
 	return claims, nil
+}
+
+// HashToken returns the SHA-256 hex digest of a token string for safe storage.
+func HashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

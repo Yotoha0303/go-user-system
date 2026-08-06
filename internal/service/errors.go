@@ -78,4 +78,34 @@ var (
 		response.CodeDatabaseNotInitialized,
 		"database is not initialized",
 	)
+
+	ErrRefreshTokenInvalid = apperror.New(
+		http.StatusUnauthorized,
+		response.CodeRefreshTokenInvalid,
+		"refresh token is invalid",
+	)
+
+	ErrRefreshTokenExpired = apperror.New(
+		http.StatusUnauthorized,
+		response.CodeRefreshTokenExpired,
+		"refresh token is expired",
+	)
+
+	ErrRefreshTokenRevoked = apperror.New(
+		http.StatusUnauthorized,
+		response.CodeRefreshTokenRevoked,
+		"refresh token has been revoked",
+	)
+
+	ErrPermissionDenied = apperror.New(
+		http.StatusForbidden,
+		response.CodePermissionDenied,
+		"permission denied",
+	)
+
+	ErrRoleNotFound = apperror.New(
+		http.StatusNotFound,
+		response.CodeRoleNotFound,
+		"role not found",
+	)
 )

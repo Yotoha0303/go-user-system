@@ -12,6 +12,8 @@ mysql:
   pingTimeout: 3s
 jwt:
   expireHours: 24
+  accessTokenExpireMinutes: 15
+  refreshTokenExpireHours: 168
 http:
   server:
     readTimeout: 5s

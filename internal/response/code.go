@@ -23,6 +23,9 @@ var (
 	CodeTokenInvalid          = 3008
 	CodeTokenMalformed        = 3009
 	CodeTokenSignatureInvalid = 3010
+	CodeRefreshTokenInvalid   = 3011
+	CodeRefreshTokenExpired   = 3012
+	CodeRefreshTokenRevoked   = 3013
 
 	CodeNicknameInvalid      = 4001
 	CodeUpdateNicknameFailed = 4002
@@ -30,6 +33,9 @@ var (
 	CodeReadinessFailed = 5001
 
 	CodeDatabaseNotInitialized = 5002
+	CodePermissionDenied       = 5003
+	CodeRoleNotFound           = 5004
+	CodeRBACFailed             = 5005
 
 	CodeInternalError  = 6001
 	CodeRequestTimeout = 6002

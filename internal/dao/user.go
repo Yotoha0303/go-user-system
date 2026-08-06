@@ -55,3 +55,9 @@ func ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, 
 func UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
 	return withContext(ctx, db).Where("id = ? and status = ?", userID, model.UserStatusActive).Model(&model.User{}).Update("status", model.UserStatusDisabled).Error
 }
+
+func CountUsers(ctx context.Context, db *gorm.DB) (int64, error) {
+	var count int64
+	err := withContext(ctx, db).Model(&model.User{}).Count(&count).Error
+	return count, err
+}

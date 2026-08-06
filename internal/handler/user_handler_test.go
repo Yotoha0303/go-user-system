@@ -291,8 +291,102 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 	if data["access_token"] == "" {
 		t.Fatal("expected access_token to be returned")
 	}
+	if _, exists := data["refresh_token"]; exists {
+		t.Fatal("expected refresh_token not to be exposed in response body")
+	}
+
+	var refreshCookie *http.Cookie
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == refreshTokenCookieName {
+			refreshCookie = cookie
+			break
+		}
+	}
+	if refreshCookie == nil {
+		t.Fatal("expected refresh token cookie")
+	}
+	if !refreshCookie.HttpOnly || refreshCookie.Path != refreshTokenCookiePath {
+		t.Fatalf("unexpected refresh cookie attributes: %+v", refreshCookie)
+	}
 	if got := fakeService.loginCtx.Value(requestContextKey{}); got != "request-context" {
 		t.Fatalf("expected request context to be passed to login service, got %v", got)
+	}
+}
+
+type fakeAuthSessionService struct {
+	rotatedOldJTI string
+	revokedJTI    string
+}
+
+func (s *fakeAuthSessionService) StoreRefreshToken(ctx context.Context, token *model.RefreshToken) error {
+	return nil
+}
+
+func (s *fakeAuthSessionService) RotateRefreshToken(ctx context.Context, userID int64, oldJTI string, oldHash string, next *model.RefreshToken) error {
+	s.rotatedOldJTI = oldJTI
+	return nil
+}
+
+func (s *fakeAuthSessionService) RevokeRefreshToken(ctx context.Context, userID int64, jti string, tokenHash string) error {
+	s.revokedJTI = jti
+	return nil
+}
+
+func TestRefreshTokenHandlerReadsCookieAndRotatesCookie(t *testing.T) {
+	manager := testTokenManager(t)
+	issuedToken, err := manager.GenerateRefreshToken(7, "alice")
+	if err != nil {
+		t.Fatalf("generate refresh token failed: %v", err)
+	}
+	sessionService := &fakeAuthSessionService{}
+	userHandler := NewUserHandler(&fakeUserService{}, manager, sessionService)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/refresh", userHandler.RefreshTokenHandler)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookieName, Value: issuedToken.Token})
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if sessionService.rotatedOldJTI != issuedToken.JTI {
+		t.Fatalf("expected old JTI %q, got %q", issuedToken.JTI, sessionService.rotatedOldJTI)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) == 0 || cookies[0].Name != refreshTokenCookieName || !cookies[0].HttpOnly {
+		t.Fatalf("expected rotated HttpOnly refresh cookie, got %+v", cookies)
+	}
+}
+
+func TestLogoutHandlerReadsAndClearsCookie(t *testing.T) {
+	manager := testTokenManager(t)
+	issuedToken, err := manager.GenerateRefreshToken(7, "alice")
+	if err != nil {
+		t.Fatalf("generate refresh token failed: %v", err)
+	}
+	sessionService := &fakeAuthSessionService{}
+	userHandler := NewUserHandler(&fakeUserService{}, manager, sessionService)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/logout", userHandler.LogoutHandler)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookieName, Value: issuedToken.Token})
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+	if sessionService.revokedJTI != issuedToken.JTI {
+		t.Fatalf("expected revoked JTI %q, got %q", issuedToken.JTI, sessionService.revokedJTI)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) == 0 || cookies[0].Name != refreshTokenCookieName || cookies[0].MaxAge != -1 {
+		t.Fatalf("expected cleared refresh cookie, got %+v", cookies)
 	}
 }
 

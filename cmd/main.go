@@ -29,7 +29,7 @@ type appDeps struct {
 	loadEnv         func() error
 	loadConfig      func(path string) (*config.Config, error)
 	initDB          func(cfg *config.Config) (*gorm.DB, error)
-	newTokenManager func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error)
+	newTokenManager func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
 	setupRouter     func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler
 	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify          func(c chan<- os.Signal, sig ...os.Signal)
@@ -41,8 +41,8 @@ func defaultAppDeps() appDeps {
 		loadEnv:    config.LoadEnv,
 		loadConfig: config.Load,
 		initDB:     database.InitDB,
-		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
-			return auth.NewTokenManager(secret, issuer, ttl)
+		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
+			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL)
 		},
 		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
 			return router.SetupRouter(db, logger, tokenManager)
@@ -68,6 +68,16 @@ var (
 	fatalf            = log.Fatalf
 )
 
+// @title go-user-system API
+// @version 1.0.0
+// @description 用户系统后端接口文档，包含 JWT Access/Refresh 双 Token 认证、RBAC 权限控制和统一响应结构。
+// @host localhost:8082
+// @BasePath /
+// @schemes http
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description 输入 Bearer access_token，例如：Bearer eyJhbGciOi...
 func main() {
 	if err := run(getDefaultAppDeps()); err != nil {
 		fatalf("application failed: %v", err)
@@ -109,7 +119,8 @@ func run(deps appDeps) error {
 	tokenManager, err := deps.newTokenManager(
 		os.Getenv("JWT_SECRET"),
 		"go-user-system",
-		time.Duration(cfg.JWT.ExpireHours)*time.Hour,
+		time.Duration(cfg.JWT.AccessTokenExpireMinutes)*time.Minute,
+		time.Duration(cfg.JWT.RefreshTokenExpireHours)*time.Hour,
 	)
 
 	if err != nil {

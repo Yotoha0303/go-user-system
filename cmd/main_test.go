@@ -113,12 +113,17 @@ func baseRunDeps(t *testing.T) appDeps {
 		loadConfig: func(path string) (*config.Config, error) {
 			return &config.Config{
 				Server: config.ServerConfig{Port: 8080},
+				JWT: config.JWTConfig{
+					ExpireHours:              24,
+					AccessTokenExpireMinutes: 15,
+					RefreshTokenExpireHours:  168,
+				},
 			}, nil
 		},
 		initDB: func(cfg *config.Config) (*gorm.DB, error) {
 			return openMainGormDB(t), nil
 		},
-		newTokenManager: func(secret string, issuer string, ttl time.Duration) (*auth.TokenManager, error) {
+		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return &auth.TokenManager{}, nil
 		},
 		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {

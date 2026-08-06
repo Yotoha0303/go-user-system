@@ -75,7 +75,34 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 		Status:       model.UserStatusActive,
 	}
 
-	if err := s.store.CreateUser(ctx, s.db, &user); err != nil {
+	if s.rbacRepo == nil {
+		if err := s.store.CreateUser(ctx, s.db, &user); err != nil {
+			return apperror.Wrap(
+				http.StatusInternalServerError,
+				response.CodeRegisterFailed,
+				"注册失败",
+				err,
+			)
+		}
+		return nil
+	}
+
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		userCount, err := s.store.CountUsers(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := s.store.CreateUser(ctx, tx, &user); err != nil {
+			return err
+		}
+		if err := s.rbacRepo.AssignRoleToUserByCode(ctx, tx, user.ID, model.RoleCodeUser); err != nil {
+			return err
+		}
+		if userCount == 0 {
+			return s.rbacRepo.AssignRoleToUserByCode(ctx, tx, user.ID, model.RoleCodeAdmin)
+		}
+		return nil
+	}); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,
 			response.CodeRegisterFailed,
@@ -242,7 +269,16 @@ func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req 
 			)
 		}
 
-		// 使旧 token 失效；记录安全审计日志？
+		if s.refreshRepo != nil {
+			if err := s.refreshRepo.RevokeAllByUserID(ctx, tx, userID, time.Now()); err != nil {
+				return apperror.Wrap(
+					http.StatusInternalServerError,
+					response.CodeUpdateUserPasswordFailed,
+					"修改密码失败",
+					err,
+				)
+			}
+		}
 
 		return nil
 	})

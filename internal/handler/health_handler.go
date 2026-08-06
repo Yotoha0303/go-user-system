@@ -16,18 +16,37 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
 	return &HealthHandler{db: db}
 }
 
+// PingHandler godoc
+// @Summary 基础连通性检查
+// @Tags health
+// @Produce json
+// @Success 200 {object} response.Response
+// @Router /ping [get]
 func (h *HealthHandler) PingHandler(c *gin.Context) {
 	response.Success(c, gin.H{
 		"message": "success",
 	})
 }
 
+// LivezHandler godoc
+// @Summary 应用存活检查
+// @Tags health
+// @Produce json
+// @Success 200 {object} response.Response
+// @Router /livez [get]
 func (h *HealthHandler) LivezHandler(c *gin.Context) {
 	response.Success(c, gin.H{
 		"status": "alive",
 	})
 }
 
+// ReadyzHandler godoc
+// @Summary 服务就绪检查
+// @Tags health
+// @Produce json
+// @Success 200 {object} response.Response
+// @Failure 503 {object} response.Response
+// @Router /readyz [get]
 func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 	if h.db == nil {
 		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not initialized")

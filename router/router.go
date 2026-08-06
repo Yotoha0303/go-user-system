@@ -4,8 +4,10 @@ import (
 	"go-user-system/internal/auth"
 	"go-user-system/internal/handler"
 	"go-user-system/internal/middleware"
+	"go-user-system/internal/model"
 	"go-user-system/internal/service"
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,11 +23,15 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 	)
 
 	userService := service.NewUserService(db)
-	userHandler := handler.NewUserHandler(userService, tokenManager)
+	authService := service.NewAuthService(db)
+	rbacService := service.NewRBACService(db)
+	userHandler := handler.NewUserHandler(userService, tokenManager, authService)
+	rbacHandler := handler.NewRBACHandler(rbacService)
 	healthHandler := handler.NewHealthHandler(db)
 
 	registerHealthRoutes(r, healthHandler)
-	registerAPIRoutes(r, userHandler, tokenManager)
+	registerSwaggerRoutes(r)
+	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, rbacService)
 
 	return r
 }
@@ -36,11 +42,18 @@ func registerHealthRoutes(r *gin.Engine, healthHandler *handler.HealthHandler) {
 	r.GET("/readyz", healthHandler.ReadyzHandler)
 }
 
-func registerAPIRoutes(rg *gin.Engine, userHandler *handler.UserHandler, tokenManager *auth.TokenManager) {
+func registerAPIRoutes(
+	rg *gin.Engine,
+	userHandler *handler.UserHandler,
+	rbacHandler *handler.RBACHandler,
+	tokenManager *auth.TokenManager,
+	rbacService *service.RBACService,
+) {
 	apiV1 := rg.Group("/api/v1")
 
 	registerAuthRoutes(apiV1, userHandler)
-	registerUsersRoutes(apiV1, userHandler, tokenManager)
+	registerUsersRoutes(apiV1, userHandler, rbacHandler, tokenManager, rbacService)
+	registerAdminRoutes(apiV1, rbacHandler, tokenManager, rbacService)
 }
 
 func registerAuthRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) {
@@ -48,16 +61,40 @@ func registerAuthRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) {
 	{
 		auth.POST("/register", userHandler.RegisterHandler)
 		auth.POST("/login", userHandler.LoginHandler)
+		auth.POST("/refresh", userHandler.RefreshTokenHandler)
+		auth.POST("/logout", userHandler.LogoutHandler)
 
 	}
 }
 
-func registerUsersRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler, tokenManager *auth.TokenManager) {
+func registerUsersRoutes(
+	rg *gin.RouterGroup,
+	userHandler *handler.UserHandler,
+	rbacHandler *handler.RBACHandler,
+	tokenManager *auth.TokenManager,
+	rbacService *service.RBACService,
+) {
 	users := rg.Group("/users")
 	users.Use(middleware.AuthMiddleware(tokenManager))
 	{
-		users.GET("/me", userHandler.MeHandler)
-		users.PUT("/me/profile", userHandler.UpdateProfileHandler)
-		users.PATCH("/me/update/password", userHandler.UpdateUserPasswordHandler)
+		users.GET("/me", middleware.RequirePermission(rbacService, model.PermissionProfileRead), userHandler.MeHandler)
+		users.GET("/me/authorization", rbacHandler.GetMyAuthorizationHandler)
+		users.PUT("/me/profile", middleware.RequirePermission(rbacService, model.PermissionProfileUpdate), userHandler.UpdateProfileHandler)
+		users.PATCH("/me/update/password", middleware.RequirePermission(rbacService, model.PermissionPasswordUpdate), userHandler.UpdateUserPasswordHandler)
+	}
+}
+
+func registerAdminRoutes(
+	rg *gin.RouterGroup,
+	rbacHandler *handler.RBACHandler,
+	tokenManager *auth.TokenManager,
+	rbacService *service.RBACService,
+) {
+	admin := rg.Group("/admin")
+	admin.Use(middleware.AuthMiddleware(tokenManager))
+	{
+		admin.GET("/roles", middleware.RequirePermission(rbacService, model.PermissionAdminRolesRead), rbacHandler.ListRolesHandler)
+		admin.GET("/permissions", middleware.RequirePermission(rbacService, model.PermissionAdminPermsRead), rbacHandler.ListPermissionsHandler)
+		admin.PUT("/users/:id/roles", middleware.RequirePermission(rbacService, model.PermissionAdminUserRoleEdit), rbacHandler.AssignUserRolesHandler)
 	}
 }

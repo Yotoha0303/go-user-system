@@ -38,7 +38,10 @@ type MySQLConfig struct {
 }
 
 type JWTConfig struct {
-	ExpireHours int `yaml:"expireHours"`
+	ExpireHours              int    `yaml:"expireHours"`
+	AccessTokenExpireMinutes int    `yaml:"accessTokenExpireMinutes"`
+	RefreshTokenExpireHours  int    `yaml:"refreshTokenExpireHours"`
+	Algorithm                string `yaml:"algorithm"`
 }
 
 type HttpServer struct {
@@ -88,6 +91,18 @@ func (c Config) Validate() error {
 
 	if jwt.ExpireHours <= 0 {
 		return ErrInvalidExpireHours
+	}
+
+	if jwt.AccessTokenExpireMinutes <= 0 {
+		return ErrInvalidExpireHours
+	}
+
+	if jwt.RefreshTokenExpireHours <= 0 {
+		return ErrInvalidExpireHours
+	}
+
+	if jwt.Algorithm != "HS256" && jwt.Algorithm != "RS256" {
+		return fmt.Errorf("invalid JWT algorithm: %s (supported: HS256, RS256)", jwt.Algorithm)
 	}
 
 	if mysql.Host == "" {
@@ -156,6 +171,9 @@ func (c Config) Validate() error {
 
 func LoadEnv() error {
 	if err := loadEnvFile(".env"); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
 		return fmt.Errorf("load env file failed: %w", err)
 	}
 	return nil
@@ -302,11 +320,38 @@ func applyEnvOverrides(cfg *Config) error {
 		}
 		cfg.JWT.ExpireHours = hours
 	}
+
+	if v := os.Getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES"); v != "" {
+		minutes, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid JWT_ACCESS_TOKEN_EXPIRE_MINUTES: %w", err)
+		}
+		cfg.JWT.AccessTokenExpireMinutes = minutes
+	}
+
+	if v := os.Getenv("JWT_REFRESH_TOKEN_EXPIRE_HOURS"); v != "" {
+		hours, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid JWT_REFRESH_TOKEN_EXPIRE_HOURS: %w", err)
+		}
+		cfg.JWT.RefreshTokenExpireHours = hours
+	}
 	return nil
 }
 
 func applyDefaults(cfg *Config) {
 	http := &cfg.HttpServer.Server
+	jwt := &cfg.JWT
+
+	if jwt.AccessTokenExpireMinutes == 0 && jwt.ExpireHours > 0 {
+		jwt.AccessTokenExpireMinutes = jwt.ExpireHours * 60
+	}
+	if jwt.RefreshTokenExpireHours == 0 {
+		jwt.RefreshTokenExpireHours = 24 * 7
+	}
+	if jwt.Algorithm == "" {
+		jwt.Algorithm = "HS256"
+	}
 
 	if http.ReadTimeOut == 0 {
 		http.ReadTimeOut = 5 * time.Second

@@ -4,20 +4,25 @@ import (
 	"context"
 	"go-user-system/internal/dao"
 	"go-user-system/internal/model"
+	"go-user-system/internal/repository"
 	"time"
 
 	"gorm.io/gorm"
 )
 
 type UserService struct {
-	db    *gorm.DB
-	store userStore
+	db          *gorm.DB
+	store       userStore
+	refreshRepo repository.RefreshTokenRepository
+	rbacRepo    repository.RBACRepository
 }
 
 func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{
-		db:    db,
-		store: daoUserStore{},
+		db:          db,
+		store:       daoUserStore{},
+		refreshRepo: repository.NewGormRefreshTokenRepository(),
+		rbacRepo:    repository.NewGormRBACRepository(),
 	}
 }
 
@@ -31,6 +36,7 @@ type userStore interface {
 	UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error
 	ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error)
 	UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error
+	CountUsers(ctx context.Context, db *gorm.DB) (int64, error)
 }
 
 type daoUserStore struct{}
@@ -69,4 +75,8 @@ func (daoUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset int
 
 func (daoUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
 	return dao.UserDisabled(ctx, db, userID)
+}
+
+func (daoUserStore) CountUsers(ctx context.Context, db *gorm.DB) (int64, error) {
+	return dao.CountUsers(ctx, db)
 }

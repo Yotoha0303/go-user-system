@@ -127,6 +127,13 @@ type fakeUserStore struct {
 	updateUserPasswordByUserIDErr error
 	oldPasswordHash               string
 	newPasswordHash               string
+	userCount                     int64
+	countUsersErr                 error
+}
+
+type fakeRBACRepo struct {
+	assignedRoleCodes []string
+	assignErr         error
 }
 
 func (s *fakeUserStore) CreateUser(ctx context.Context, db *gorm.DB, user *model.User) error {
@@ -177,6 +184,42 @@ func (s *fakeUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset
 
 // TODO
 func (s *fakeUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
+	return nil
+}
+
+func (s *fakeUserStore) CountUsers(ctx context.Context, db *gorm.DB) (int64, error) {
+	return s.userCount, s.countUsersErr
+}
+
+func (r *fakeRBACRepo) AssignRoleToUserByCode(ctx context.Context, db *gorm.DB, userID int64, roleCode string) error {
+	if r.assignErr != nil {
+		return r.assignErr
+	}
+	r.assignedRoleCodes = append(r.assignedRoleCodes, roleCode)
+	return nil
+}
+
+func (r *fakeRBACRepo) UserHasPermission(ctx context.Context, db *gorm.DB, userID int64, permissionCode string) (bool, error) {
+	return false, nil
+}
+
+func (r *fakeRBACRepo) ListRoles(ctx context.Context, db *gorm.DB) ([]model.Role, error) {
+	return nil, nil
+}
+
+func (r *fakeRBACRepo) ListPermissions(ctx context.Context, db *gorm.DB) ([]model.Permission, error) {
+	return nil, nil
+}
+
+func (r *fakeRBACRepo) ListUserRoleCodes(ctx context.Context, db *gorm.DB, userID int64) ([]string, error) {
+	return nil, nil
+}
+
+func (r *fakeRBACRepo) ListUserPermissionCodes(ctx context.Context, db *gorm.DB, userID int64) ([]string, error) {
+	return nil, nil
+}
+
+func (r *fakeRBACRepo) ReplaceUserRolesByCodes(ctx context.Context, db *gorm.DB, userID int64, roleCodes []string) error {
 	return nil
 }
 
@@ -394,6 +437,55 @@ func TestRegisterCreatesActiveUserWithTrimmedUsernameAndHashedPassword(t *testin
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(store.createdUser.PasswordHash), []byte("password123")); err != nil {
 		t.Fatalf("password hash does not match: %v", err)
+	}
+}
+
+func TestRegisterAssignsUserRoleToRegularUser(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsernameErr: gorm.ErrRecordNotFound,
+		userCount:         3,
+	}
+	rbacRepo := &fakeRBACRepo{}
+	userService := newUnitUserService(store)
+	userService.db = openServiceDryRunDB(t)
+	userService.rbacRepo = rbacRepo
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	if len(rbacRepo.assignedRoleCodes) != 1 || rbacRepo.assignedRoleCodes[0] != model.RoleCodeUser {
+		t.Fatalf("expected only user role, got %v", rbacRepo.assignedRoleCodes)
+	}
+}
+
+func TestRegisterAssignsAdminRoleToFirstUser(t *testing.T) {
+	store := &fakeUserStore{
+		userByUsernameErr: gorm.ErrRecordNotFound,
+		userCount:         0,
+	}
+	rbacRepo := &fakeRBACRepo{}
+	userService := newUnitUserService(store)
+	userService.db = openServiceDryRunDB(t)
+	userService.rbacRepo = rbacRepo
+
+	err := userService.Register(context.Background(), request.RegisterRequest{
+		Username: "alice",
+		Password: "password123",
+	})
+
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	if len(rbacRepo.assignedRoleCodes) != 2 {
+		t.Fatalf("expected two roles, got %v", rbacRepo.assignedRoleCodes)
+	}
+	if rbacRepo.assignedRoleCodes[0] != model.RoleCodeUser || rbacRepo.assignedRoleCodes[1] != model.RoleCodeAdmin {
+		t.Fatalf("expected user and admin roles, got %v", rbacRepo.assignedRoleCodes)
 	}
 }
 

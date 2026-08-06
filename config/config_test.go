@@ -35,6 +35,8 @@ mysql:
   pingTimeout: 3s
 jwt:
   expireHours: 24
+  accessTokenExpireMinutes: 15
+  refreshTokenExpireHours: 168
 http:
   server:
     readTimeout: 5s
@@ -63,6 +65,12 @@ func TestLoadReadsConfigFile(t *testing.T) {
 	}
 	if cfg.JWT.ExpireHours != 24 {
 		t.Fatalf("expected jwt expire hours 24, got %d", cfg.JWT.ExpireHours)
+	}
+	if cfg.JWT.AccessTokenExpireMinutes != 15 {
+		t.Fatalf("expected jwt access token expire minutes 15, got %d", cfg.JWT.AccessTokenExpireMinutes)
+	}
+	if cfg.JWT.RefreshTokenExpireHours != 168 {
+		t.Fatalf("expected jwt refresh token expire hours 168, got %d", cfg.JWT.RefreshTokenExpireHours)
 	}
 
 	if cfg.MySQL.MaxOpenConns != 10 {
@@ -96,7 +104,11 @@ func validConfig() Config {
 			ConnMaxIdleTime: 5 * time.Minute,
 			PingTimeout:     3 * time.Second,
 		},
-		JWT: JWTConfig{ExpireHours: 24},
+		JWT: JWTConfig{
+			ExpireHours:              24,
+			AccessTokenExpireMinutes: 15,
+			RefreshTokenExpireHours:  168,
+		},
 		HttpServer: HttpServer{
 			Server: HttpServerConfig{
 				ReadTimeOut:       5 * time.Second,
