@@ -1,0 +1,103 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-user-system
+  namespace: go-user-system
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: go-user-system
+  template:
+    metadata:
+      labels:
+        app: go-user-system
+    spec:
+      # --- Init container: runs database migrations before the app starts ---
+      initContainers:
+        - name: db-migrate
+          image: go-user-system:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "==> Running goose migrations (will retry until MySQL is ready)..."
+              export GOOSE_DRIVER=mysql
+              export GOOSE_DBSTRING="${DB_USER}:${DB_PASSWORD}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true&multiStatements=true"
+              export GOOSE_MIGRATION_DIR=/app/migrations
+              RETRIES=0
+              MAX_RETRIES=60
+              until goose -no-color up; do
+                RETRIES=$((RETRIES + 1))
+                if [ $RETRIES -ge $MAX_RETRIES ]; then
+                  echo "ERROR: Migration failed after $MAX_RETRIES attempts. Exiting."
+                  exit 1
+                fi
+                echo "    Attempt $RETRIES/$MAX_RETRIES failed, retrying in 5s..."
+                sleep 5
+              done
+              echo "==> Migrations complete."
+          envFrom:
+            - secretRef:
+                name: go-user-system-secret
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_NAME
+      containers:
+        - name: app
+          image: go-user-system:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - secretRef:
+                name: go-user-system-secret
+            - configMapRef:
+                name: go-user-system-config
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8082
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yml
+              subPath: config.yml
+      volumes:
+        - name: config
+          configMap:
+            name: go-user-system-config

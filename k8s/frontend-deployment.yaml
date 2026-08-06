@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-user-system-frontend
+  namespace: go-user-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-user-system-frontend
+  template:
+    metadata:
+      labels:
+        app: go-user-system-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: dist
+          mountPath: /usr/share/nginx/html
+          readOnly: true
+      volumes:
+      - name: dist
+        emptyDir: {}
+---
+# Note: To use built dist/, run `npm run build` in frontend/, then mount a host path or use PVC in production.
+# For local kind testing, copy dist to a volume or use hostPath.

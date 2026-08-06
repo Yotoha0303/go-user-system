@@ -3,31 +3,41 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: go-user-system-app
+    container_name: go-user-system-backend
+    image: yotoha/go-user-system:dev   # 可通过环境变量覆盖
     ports:
       - "8082:8082"
     environment:
       DB_HOST: mysql
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      APP_PORT: "8082"
     depends_on:
       mysql:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/readyz"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
+    # 生产级资源限制（可按需调整）
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
 
   mysql:
     image: mysql:8.4
     container_name: go-user-system-mysql
-    ports:
-      - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_HOST: "%"
       MYSQL_DATABASE: go_user_system
     volumes:
       - mysql_data:/var/lib/mysql
@@ -36,7 +46,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 10s
     restart: unless-stopped
+    # 生产级资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+networks:
+  default:
+    driver: bridge
 
 volumes:
   mysql_data:
+  app_data:   # 如需持久化应用数据可添加

@@ -1,0 +1,38 @@
+# configmap.config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: go-user-system-config
+  namespace: go-user-system
+data:
+  config.yml: |
+    server:
+      port: 8082
+    mysql:
+      host: go-user-system-mysql
+      port: "3306"
+      user: root
+      database: go_user_system
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifeTime: 30m
+      connMaxIdleTime: 5m
+      pingTimeout: 3s
+    jwt:
+      expireHours: 24
+      accessTokenExpireMinutes: 15
+      refreshTokenExpireHours: 168
+    http:
+      server:
+        readTimeout: 5s
+        writeTimeout: 10s
+        idleTimeout: 60s
+        readHeaderTimeout: 2s
+        maxHeaderBytesKib: 128
+        timeout: 5s
+  # --- Init container env vars (flat keys for env var consumption) ---
+  # Keep these in sync with the config.yml mysql block above.
+  DB_HOST: "go-user-system-mysql"
+  DB_PORT: "3306"
+  DB_USER: "root"
+  DB_NAME: "go_user_system"
