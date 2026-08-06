@@ -42,6 +42,12 @@ GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parse
 GOOSE_MIGRATION_DIR=./migrations
 ```
 
+Windows Docker Desktop 注意：如果本机已经有 MySQL 监听 `127.0.0.1:3306`，Docker 端口可能只在 IPv6 loopback 上可用。此时把 `.env.goose` 改为：
+
+```dotenv
+GOOSE_DBSTRING=root:your_mysql_password@tcp([::1]:3306)/go_user_system?parseTime=true&multiStatements=true
+```
+
 ## 3. 启动服务
 
 应用启动不会自动执行 migration。Compose 启动容器后，需要手动执行 `make migrate-up`。
@@ -135,6 +141,9 @@ make migrate-down
 
 - `migrations/00001_create_users.sql`
 - `migrations/00002_add_user_audit_fields.sql`
+- `migrations/00003_create_refresh_tokens.sql`
+- `migrations/00004_create_rbac_tables.sql`
+- `migrations/00005_backfill_user_roles.sql`
 
 ## 8. 停止服务
 

@@ -1,0 +1,580 @@
+basePath: /
+definitions:
+  request.AssignUserRolesRequest:
+    properties:
+      role_codes:
+        items:
+          type: string
+        type: array
+    required:
+    - role_codes
+    type: object
+  request.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  request.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  request.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  request.RegisterRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  request.UpdatePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  request.UpdateProfileRequest:
+    properties:
+      nickname:
+        type: string
+    required:
+    - nickname
+    type: object
+  response.AuthorizationInfoResponse:
+    properties:
+      permission_codes:
+        items:
+          type: string
+        type: array
+      role_codes:
+        items:
+          type: string
+        type: array
+    type: object
+  response.PermissionResponse:
+    properties:
+      code:
+        type: string
+      id:
+        type: integer
+      method:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+    type: object
+  response.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      msg:
+        type: string
+    type: object
+  response.RoleResponse:
+    properties:
+      code:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  response.TokenAndUserInfoResponse:
+    properties:
+      access_token:
+        type: string
+      access_token_expires_in:
+        type: integer
+      refresh_token_expires_in:
+        type: integer
+      user:
+        $ref: '#/definitions/response.UserInfoResponse'
+    type: object
+  response.TokenPairResponse:
+    properties:
+      access_token:
+        type: string
+      access_token_expires_in:
+        type: integer
+      refresh_token_expires_in:
+        type: integer
+    type: object
+  response.UserInfoResponse:
+    properties:
+      id:
+        type: integer
+      last_login_at:
+        type: string
+      nickname:
+        type: string
+      status:
+        type: integer
+      username:
+        type: string
+    type: object
+host: localhost:8082
+info:
+  contact: {}
+  description: 用户系统后端接口文档，包含 JWT Access/Refresh 双 Token 认证、RBAC 权限控制和统一响应结构。
+  title: go-user-system API
+  version: 1.0.0
+paths:
+  /api/v1/admin/permissions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/response.PermissionResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 查询权限列表
+      tags:
+      - admin-rbac
+  /api/v1/admin/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/response.RoleResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 查询角色列表
+      tags:
+      - admin-rbac
+  /api/v1/admin/users/{id}/roles:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 角色编码列表
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/request.AssignUserRolesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 给用户分配角色
+      tags:
+      - admin-rbac
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 登录参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/request.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.TokenAndUserInfoResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 用户登录
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 浏览器客户端优先通过 HttpOnly Cookie 发送 Refresh Token，请求体仅用于非浏览器客户端兼容。
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/request.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 退出登录并吊销 Refresh Token
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 浏览器客户端优先通过 HttpOnly Cookie 发送 Refresh Token，请求体仅用于非浏览器客户端兼容。
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/request.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.TokenPairResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 刷新双 Token
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 注册参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 用户注册
+      tags:
+      - auth
+  /api/v1/users/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.UserInfoResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 获取当前用户资料
+      tags:
+      - users
+  /api/v1/users/me/authorization:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.AuthorizationInfoResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 查询当前用户角色和权限码
+      tags:
+      - users
+  /api/v1/users/me/profile:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 昵称参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 修改当前用户昵称
+      tags:
+      - users
+  /api/v1/users/me/update/password:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 密码参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/request.UpdatePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: 修改当前用户密码
+      tags:
+      - users
+  /livez:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 应用存活检查
+      tags:
+      - health
+  /ping:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 基础连通性检查
+      tags:
+      - health
+  /readyz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 服务就绪检查
+      tags:
+      - health
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    description: 输入 Bearer access_token，例如：Bearer eyJhbGciOi...
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
