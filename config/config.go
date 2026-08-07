@@ -42,6 +42,7 @@ type JWTConfig struct {
 	AccessTokenExpireMinutes int    `yaml:"accessTokenExpireMinutes"`
 	RefreshTokenExpireHours  int    `yaml:"refreshTokenExpireHours"`
 	Algorithm                string `yaml:"algorithm"`
+	Secret                   string `yaml:"secret"`
 }
 
 type HttpServer struct {
@@ -103,6 +104,10 @@ func (c Config) Validate() error {
 
 	if jwt.Algorithm != "HS256" && jwt.Algorithm != "RS256" {
 		return fmt.Errorf("invalid JWT algorithm: %s (supported: HS256, RS256)", jwt.Algorithm)
+	}
+
+	if len(jwt.Secret) < 32 {
+		return fmt.Errorf("invalid JWT secret: must be at least 32 characters (got %d)", len(jwt.Secret))
 	}
 
 	if mysql.Host == "" {
@@ -327,6 +332,10 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("invalid JWT_ACCESS_TOKEN_EXPIRE_MINUTES: %w", err)
 		}
 		cfg.JWT.AccessTokenExpireMinutes = minutes
+	}
+
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		cfg.JWT.Secret = v
 	}
 
 	if v := os.Getenv("JWT_REFRESH_TOKEN_EXPIRE_HOURS"); v != "" {

@@ -51,6 +51,7 @@ func AuthMiddleware(tokenManager *auth.TokenManager) gin.HandlerFunc {
 
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
+		c.Set("access_token", tokenString)
 		c.Next()
 	}
 }

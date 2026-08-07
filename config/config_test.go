@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,6 +38,7 @@ jwt:
   expireHours: 24
   accessTokenExpireMinutes: 15
   refreshTokenExpireHours: 168
+  secret: test_jwt_secret_32_chars_long_for_testing
 http:
   server:
     readTimeout: 5s
@@ -47,6 +49,23 @@ http:
     timeout: 5s
 
 `
+}
+
+func TestLoadAppliesJWTSecretFromEnv(t *testing.T) {
+	const secret = "env_jwt_secret_32_chars_long_for_testing"
+	t.Setenv("JWT_SECRET", secret)
+
+	yaml := strings.Replace(validConfigYAML(), "  secret: test_jwt_secret_32_chars_long_for_testing\n", "", 1)
+	path := writeTempConfig(t, yaml)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+
+	if cfg.JWT.Secret != secret {
+		t.Fatalf("expected jwt secret from env, got %q", cfg.JWT.Secret)
+	}
 }
 
 func TestLoadReadsConfigFile(t *testing.T) {
@@ -108,6 +127,8 @@ func validConfig() Config {
 			ExpireHours:              24,
 			AccessTokenExpireMinutes: 15,
 			RefreshTokenExpireHours:  168,
+			Secret:                   "test_jwt_secret_32_chars_long_for_testing",
+			Algorithm:                "HS256",
 		},
 		HttpServer: HttpServer{
 			Server: HttpServerConfig{

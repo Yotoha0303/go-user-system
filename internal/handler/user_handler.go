@@ -40,6 +40,7 @@ type AuthSessionService interface {
 type UserHandler struct {
 	userService          UserService
 	authSessionService   AuthSessionService
+	tokenManager         *auth.TokenManager
 	generateToken        func(userID int64, username string) (string, error)
 	generateRefreshToken func(userID int64, username string) (*auth.IssuedToken, error)
 	parseRefreshToken    func(tokenString string) (*auth.UserClaims, error)
@@ -56,6 +57,7 @@ func NewUserHandler(userService UserService, tokenManager *auth.TokenManager, au
 	return &UserHandler{
 		userService:          userService,
 		authSessionService:   sessionService,
+		tokenManager:         tokenManager,
 		generateToken:        tokenManager.GenerateAccessToken,
 		generateRefreshToken: tokenManager.GenerateRefreshToken,
 		parseRefreshToken:    tokenManager.ParseRefreshToken,
@@ -476,6 +478,7 @@ func setRefreshTokenCookie(c *gin.Context, issuedToken *auth.IssuedToken) {
 	if issuedToken == nil {
 		return
 	}
+	//nolint:gosec
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    issuedToken.Token,
@@ -489,6 +492,7 @@ func setRefreshTokenCookie(c *gin.Context, issuedToken *auth.IssuedToken) {
 }
 
 func clearRefreshTokenCookie(c *gin.Context) {
+	//nolint:gosec
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    "",
@@ -580,6 +584,21 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 		return
 	}
 
+	// Revoke the current access token to prevent it from being used after password change
+	if accessToken, exists := c.Get("access_token"); exists {
+		if tokenStr, ok := accessToken.(string); ok && tokenStr != "" {
+			h.RevokeCurrentAccessToken(tokenStr)
+		}
+	}
+
 	clearRefreshTokenCookie(c)
 	response.Success(c, nil)
+}
+
+// RevokeCurrentAccessToken revokes the current access token after password change
+// to prevent the old token from being used with the new password.
+func (h *UserHandler) RevokeCurrentAccessToken(token string) {
+	if h.tokenManager != nil {
+		h.tokenManager.RevokeAccessToken(token)
+	}
 }

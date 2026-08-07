@@ -42,7 +42,7 @@ func defaultAppDeps() appDeps {
 		loadConfig: config.Load,
 		initDB:     database.InitDB,
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
-			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL)
+			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL, false)
 		},
 		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
 			return router.SetupRouter(db, logger, tokenManager)
@@ -117,7 +117,7 @@ func run(deps appDeps) error {
 	logger := slog
 
 	tokenManager, err := deps.newTokenManager(
-		os.Getenv("JWT_SECRET"),
+		cfg.JWT.Secret,
 		"go-user-system",
 		time.Duration(cfg.JWT.AccessTokenExpireMinutes)*time.Minute,
 		time.Duration(cfg.JWT.RefreshTokenExpireHours)*time.Hour,

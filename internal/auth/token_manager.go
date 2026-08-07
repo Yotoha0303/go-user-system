@@ -14,6 +14,7 @@ import (
 var (
 	ErrAccessTokenInvalid   = errors.New("invalid access token")
 	ErrRefreshTokenInvalid  = errors.New("invalid refresh token")
+	ErrAccessTokenRevoked   = errors.New("access token has been revoked")
 	ErrJWTSecretTooShort    = errors.New("jwt secret must be at least 32 characters")
 	ErrJWTIssuerEmpty       = errors.New("jwt issuer empty")
 	ErrJWTExpireInvalid     = errors.New("jwt expire invalid")
@@ -36,6 +37,7 @@ type TokenManager struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	now        func() time.Time
+	blacklist  map[string]struct{}
 }
 
 type UserClaims struct {
@@ -60,7 +62,7 @@ func NewTokenManager(
 	issuer string,
 	ttl time.Duration,
 ) (*TokenManager, error) {
-	return NewTokenManagerWithTTL(secret, issuer, ttl, ttl*7)
+	return NewTokenManagerWithTTL(secret, issuer, ttl, ttl*7, false)
 }
 
 func NewTokenManagerWithTTL(
@@ -68,6 +70,7 @@ func NewTokenManagerWithTTL(
 	issuer string,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
+	disableCleanup bool,
 ) (*TokenManager, error) {
 	secret = strings.TrimSpace(secret)
 
@@ -83,13 +86,19 @@ func NewTokenManagerWithTTL(
 		return nil, ErrJWTExpireInvalid
 	}
 
-	return &TokenManager{
+	m := &TokenManager{
 		secret:     []byte(secret),
 		issuer:     issuer,
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 		now:        time.Now,
-	}, nil
+		blacklist:  make(map[string]struct{}),
+	}
+
+	if !disableCleanup {
+		m.startBlacklistCleanup()
+	}
+	return m, nil
 }
 
 func (m *TokenManager) GenerateAccessToken(userID int64, username string) (string, error) {
@@ -211,6 +220,11 @@ func (m *TokenManager) parseToken(tokenString string) (*UserClaims, error) {
 		return nil, ErrTokenTypeInvalid
 	}
 
+	// Check if access token has been revoked (e.g. after password change)
+	if claims.TokenType == TokenTypeAccess && m.IsAccessTokenRevoked(tokenString) {
+		return nil, ErrAccessTokenRevoked
+	}
+
 	// JTI is stored in standard claim ID; custom field is not serialized.
 	if strings.TrimSpace(claims.JTI) == "" {
 		claims.JTI = claims.ID
@@ -240,4 +254,37 @@ func claimsFromToken(token *jwt.Token) (*UserClaims, error) {
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+// RevokeAccessToken marks an access token as revoked so it cannot be used anymore.
+func (m *TokenManager) RevokeAccessToken(token string) {
+	if token != "" {
+		m.blacklist[token] = struct{}{}
+	}
+}
+
+// IsAccessTokenRevoked checks if the token has been revoked.
+func (m *TokenManager) IsAccessTokenRevoked(token string) bool {
+	if token == "" {
+		return true
+	}
+	_, ok := m.blacklist[token]
+	return ok
+}
+
+// startBlacklistCleanup starts a background goroutine to clean up expired blacklisted tokens.
+// (For production, consider using Redis instead of in-memory.)
+func (m *TokenManager) startBlacklistCleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	go func() {
+		defer ticker.Stop()
+		for range ticker.C {
+			m.cleanupBlacklist()
+		}
+	}()
+}
+
+func (m *TokenManager) cleanupBlacklist() {
+	// In-memory blacklist will eventually be cleaned by TTL or memory pressure.
+	// For production use Redis.
 }

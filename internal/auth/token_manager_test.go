@@ -14,6 +14,7 @@ func newTestTokenManager(t *testing.T) *TokenManager {
 		"go-user-system-test",
 		time.Minute,
 		time.Hour,
+		true, // disable cleanup goroutine in tests
 	)
 	if err != nil {
 		t.Fatalf("new token manager failed: %v", err)

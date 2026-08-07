@@ -5,6 +5,7 @@
 ## 当前状态
 
 - 已实现用户注册、登录、双 Token 刷新、登出、当前用户查询、昵称修改、密码修改。
+- 修改密码后自动吊销 Access Token（防止旧 Token 被重用，已在 JWT 解析中检查）。
 - 使用 **JWT Access/Refresh 双 Token** 做接口鉴权，**Refresh Token 存储哈希并支持轮换、吊销**（已实现 Rotation）。
 - 基于 RBAC 五表模型实现角色、权限、用户角色、角色权限，并通过 Gin 中间件做接口级鉴权。
 - 使用统一响应结构、业务错误码和 `internal/apperror` 应用错误模型。
@@ -12,7 +13,7 @@
 - 使用 Goose 管理 SQL migration，不使用 GORM `AutoMigrate`。
 - 已接入 `Request ID`、结构化 access log、panic recovery 日志。
 - 已配置 HTTP server 超时、请求 context timeout、数据库连接池和启动时 DB ping timeout。
-- CI 覆盖 golangci-lint、单元测试、race 测试、go vet、migration 校验、二进制构建和 Docker 镜像构建。
+- GitHub Actions CI 覆盖 golangci-lint、单元测试、race 测试、go vet、migration 校验、二进制构建和 Docker 镜像构建；本地 `make ci` 覆盖 lint、test、race-test、vet、build 和 docker-build。
 
 ## 技术栈
 
@@ -148,7 +149,7 @@ go run ./cmd
 
 | 来源 | 作用 | 是否提交 |
 | --- | --- | --- |
-| `config.yml` | 非敏感默认配置 | 是 |
+| `config.yml` | 非敏感默认配置；不建议保存密钥 | 是 |
 | `.env.example` | 本地和 Compose 环境变量模板 | 是 |
 | `.env` | 本地真实环境变量 | 否 |
 | `.env.goose.example` | goose 本地迁移模板 | 是 |
@@ -173,10 +174,11 @@ JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 配置加载规则：
 
 - 启动时加载 `.env`，再加载 `config.yml`。
-- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`、`JWT_REFRESH_TOKEN_EXPIRE_HOURS` 可覆盖 `config.yml`。
+- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_SECRET`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`、`JWT_REFRESH_TOKEN_EXPIRE_HOURS` 可覆盖 `config.yml`。
 - `APP_PORT`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES` 和 `JWT_REFRESH_TOKEN_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
-- `DB_PASSWORD` 和 `JWT_SECRET` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
-- `JWT_SECRET` 长度必须至少 32 个字符。
+- `JWT_SECRET` 会被加载进 `cfg.JWT.Secret` 后再初始化 TokenManager；环境变量或 `.env` 中的 `JWT_SECRET` 优先级高于 `config.yml` 的 `jwt.secret`。
+- `DB_PASSWORD` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
+- `JWT_SECRET` 长度必须至少 32 个字符。生产环境推荐只通过运行时环境变量或 `.env` 注入，不要提交到 `config.yml`。
 
 `.env` 是可选的本地开发文件。容器和生产环境可以只通过运行时环境变量注入配置，不需要挂载 `.env`。
 
@@ -313,6 +315,14 @@ CI 文件：`.github/workflows/ci.yml`
 9. `go build -o bin/go-user-system ./cmd`
 10. `docker build -t go-user-system:ci .`
 
+本地等价检查：
+
+```bash
+make ci
+```
+
+`make ci` 当前执行 `make lint`、`make test`、`make race-test`、`make vet`、`make build` 和 `make docker-build`。GitHub Actions 额外执行 `goose -dir migrations validate`。
+
 ## 生产部署检查
 
 生产部署前至少确认：
@@ -342,7 +352,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 ```
 
-`JWT_SECRET` 不能为空，长度不能少于 32 个字符。Access Token 和 Refresh Token 的过期配置必须是正整数。
+`JWT_SECRET` 不能为空，长度不能少于 32 个字符。可以放在 `.env`、shell 环境变量或 `config.yml` 的 `jwt.secret` 中；如果同时存在，环境变量优先。Access Token 和 Refresh Token 的过期配置必须是正整数。
 
 ### Compose 中应用连接不上数据库
 
