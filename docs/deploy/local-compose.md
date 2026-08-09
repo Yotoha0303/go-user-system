@@ -1,101 +1,76 @@
-# 本地 Docker Compose 部署说明
+# 本地 Docker Compose 部署
 
-本文档说明如何在本地使用 Docker Compose 启动 `go-user-system`、MySQL 和 Redis。
+Compose 提供 MySQL、一次性 migration、Redis、Go 后端和 React 前端组成的完整本地栈。
 
-## 1. 前置条件
+## 前置条件
 
-- 已安装 Docker Desktop，或 Docker Engine + Docker Compose。
-- Docker 可以拉取 `golang:1.25.7-alpine`、`alpine:3.22`、`mysql:8.4`、`redis:7.4-alpine`。
-- 本地端口 `8082` 和 `3306` 未被占用。
-- 已复制 `.env.example` 为 `.env`。
-- 已复制 `.env.goose.example` 为 `.env.goose`。
-- `.env` 中已设置 `DB_PASSWORD` 和 `JWT_SECRET`。
+- Docker Engine 或 Docker Desktop，支持 `docker compose`。
+- 默认端口 `8080` 和 `8082` 未被占用；也可用 `FRONTEND_PORT`、`BACKEND_PORT` 修改。MySQL、Redis 不映射到宿主机。
+- 可以拉取 Dockerfile 与 `compose.yaml` 中固定的基础镜像。
 
-## 2. 准备配置
-
-复制模板：
+## 配置
 
 ```bash
 cp .env.example .env
-cp .env.goose.example .env.goose
 ```
 
-Windows PowerShell：
+PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
-Copy-Item .env.goose.example .env.goose
 ```
 
-修改 `.env`：
+替换以下值，root 密码与应用密码应不同：
 
 ```dotenv
-DB_PASSWORD=your_mysql_password
+DB_ROOT_PASSWORD=replace_with_a_strong_root_password
+DB_PASSWORD=replace_with_a_different_app_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+REGISTRATION_ENABLED=true
+FRONTEND_PORT=8080
+BACKEND_PORT=8082
 ```
 
-修改 `.env.goose`，确保密码和 `.env` 一致：
+`.env` 已被 Git 忽略，不得提交真实凭据。
 
-```dotenv
-GOOSE_DRIVER=mysql
-GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
-GOOSE_MIGRATION_DIR=./migrations
-```
-
-Windows Docker Desktop 注意：如果本机已经有 MySQL 监听 `127.0.0.1:3306`，Docker 端口可能只在 IPv6 loopback 上可用。此时把 `.env.goose` 改为：
-
-```dotenv
-GOOSE_DBSTRING=root:your_mysql_password@tcp([::1]:3306)/go_user_system?parseTime=true&multiStatements=true
-```
-
-## 3. 启动服务
-
-应用启动不会自动执行 migration。Compose 启动容器后，需要手动执行 `make migrate-up`。
+## 启动
 
 ```bash
-docker compose up -d --build
-make migrate-up
-```
-
-或使用 Makefile：
-
-```bash
-make compose-up
-make migrate-up
-```
-
-以上命令会：
-
-- 构建 Go 应用镜像。
-- 启动 MySQL `8.4`。
-- 启动 Redis `7.4`，启用 AOF 并挂载 `redis_data` 数据卷。
-- 创建数据库 `go_user_system`。
-- 等待 MySQL healthcheck 通过。
-- 等待 Redis healthcheck 通过。
-- 启动应用容器。
-- 通过 `make migrate-up` 使用 goose 执行 `migrations/*.sql`。
-
-## 4. 查看状态和日志
-
-```bash
+docker compose up -d --build --wait
 docker compose ps
 ```
 
-期望状态：
+启动顺序：
 
-- `go-user-system-mysql` 为 `healthy`。
-- `go-user-system-redis` 为 `healthy`。
-- `go-user-system-backend` 为 `running` 或 `healthy`。
+1. MySQL 健康检查通过。
+2. `migrate` 服务使用应用账号执行 `migrations/*.sql` 后正常退出。
+3. Redis 健康检查通过。
+4. 后端启动并通过 `/readyz`。
+5. 前端 Nginx 启动，并把 `/api` 请求代理到后端。
 
-查看日志：
+无需运行本机 Goose，也无需复制 `.env.goose.example`。`.env.goose` 仅用于后端脱离 Compose 开发时手动执行 migration。
+
+## 初始化管理员
+
+普通注册永远只获得 `user` 角色。第一个管理员必须通过一次性命令创建：
 
 ```bash
-docker compose logs -f app
-docker compose logs -f mysql
-docker compose logs -f redis
+export BOOTSTRAP_ADMIN_USERNAME=admin
+export BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password'
+docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD app bootstrap-admin
 ```
 
-## 5. 验证服务
+PowerShell：
+
+```powershell
+$env:BOOTSTRAP_ADMIN_USERNAME="admin"
+$env:BOOTSTRAP_ADMIN_PASSWORD="replace-with-a-strong-password"
+docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD app bootstrap-admin
+```
+
+系统已有管理员时命令会拒绝再次初始化。不要把管理员密码写进 Compose 文件或 Git。
+
+## 验证
 
 ```bash
 curl http://127.0.0.1:8082/ping
@@ -103,119 +78,83 @@ curl http://127.0.0.1:8082/livez
 curl http://127.0.0.1:8082/readyz
 ```
 
-`/readyz` 返回 200 表示应用进程已启动，且 MySQL 与认证状态存储均可连接。
+访问：
 
-完整接口验证可以使用：
+- Web：`http://127.0.0.1:8080`
+- Swagger：`http://127.0.0.1:8082/swagger/index.html`
 
-- `docs/http/test.http`
-- README 中的 API 概览
-
-## 6. MySQL 连接信息
-
-| 配置项 | 值 |
-| --- | --- |
-| 主机 | `127.0.0.1` |
-| 端口 | `3306` |
-| 用户 | `root` |
-| 密码 | `.env` 中的 `DB_PASSWORD` |
-| 数据库 | `go_user_system` |
-
-应用容器内部访问 MySQL 时使用：
-
-```dotenv
-DB_HOST=mysql
-DB_PORT=3306
-```
-
-原因：Compose 会创建内部 DNS，`mysql` 是数据库服务名。
-
-应用容器通过 `redis:6379` 访问 Redis。Compose 会强制设置 `REDIS_ENABLED=true`，Redis 不可用时应用不会进入可用状态。
-
-## 7. 执行 migration
-
-常用命令：
+浏览器端到端测试：
 
 ```bash
-make migrate-validate
-make migrate-status
-make migrate-version
-make migrate-up
-make migrate-down
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
 
-当前 migration 文件：
+## 日志与维护
 
-- `migrations/00001_create_users.sql`
-- `migrations/00002_add_user_audit_fields.sql`
-- `migrations/00003_create_refresh_tokens.sql`
-- `migrations/00004_create_rbac_tables.sql`
-- `migrations/00005_backfill_user_roles.sql`
-- `migrations/00006_harden_auth_sessions.sql`
+```bash
+docker compose logs -f app
+docker compose logs -f frontend
+docker compose logs migrate
+docker compose logs mysql
+docker compose logs redis
+```
 
-## 8. 停止服务
+重新执行 migration 时可运行：
 
-停止并删除容器：
+```bash
+docker compose run --rm migrate
+```
+
+停止服务但保留数据：
 
 ```bash
 docker compose down
 ```
 
-删除容器以及 MySQL、Redis 数据卷：
+删除服务和本地数据卷：
 
 ```bash
 docker compose down -v
 ```
 
-注意：`docker compose down -v` 会删除本地 MySQL 数据卷，执行前确认数据可以丢弃。
+`down -v` 会永久删除本地 MySQL 和 Redis 数据，仅用于可丢弃环境。
 
-## 9. 常见问题
+## 常见问题
 
-### 端口被占用
+### migration 失败
 
-问题：`8082` 或 `3306` 已被其他进程占用。
+问题：`migrate` 退出，后端没有启动。
 
-原因：Compose 需要把容器端口映射到宿主机端口。
-
-修改建议：停止占用端口的进程，或修改 `compose.yaml` 端口映射。
-
-示例：
-
-```yaml
-ports:
-  - "8083:8082"
-```
-
-### 应用连接数据库失败
-
-问题：应用日志出现数据库连接失败。
-
-原因：常见原因包括 MySQL 尚未健康、`.env` 密码不一致、`DB_HOST` 配置错误、migration 未执行。
+原因：常见原因是两个数据库密码未设置、旧数据卷使用了不同密码，或 SQL migration 无法执行。
 
 修改建议：
 
 ```bash
-docker compose ps
+docker compose logs migrate
 docker compose logs mysql
-docker compose logs app
-make migrate-status
+docker compose config
 ```
 
-### 修改代码后容器行为没有变化
+测试环境可在确认数据可删除后执行 `docker compose down -v` 再重建。
 
-问题：修改 Go 代码后，容器行为没有更新。
+### 修改注册开关后未生效
 
-原因：应用镜像需要重新构建。
+问题：修改 `.env` 后注册路由行为未变化。
+
+原因：运行中的后端容器仍使用创建时的环境变量。
 
 修改建议：
 
 ```bash
-docker compose up -d --build
+docker compose up -d --force-recreate app frontend
 ```
 
 ### `/readyz` 不是 200
 
-问题：`/readyz` 返回失败。
+问题：应用进程存在，但就绪检查失败。
 
-原因：应用可以启动但数据库不可访问，或数据库连接池初始化失败。
+原因：MySQL 或 Redis 不可访问时，认证服务采用 fail-closed。
 
-修改建议：先看 app 和 mysql 日志，再确认 `.env`、`.env.goose`、migration 状态。
+修改建议：先检查 `docker compose ps`，再查看 app、mysql、redis 日志和 `.env`。
