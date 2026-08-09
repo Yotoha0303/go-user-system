@@ -58,3 +58,18 @@ func TestReadyzFailsWhenDatabaseIsNotInitialized(t *testing.T) {
 		t.Fatalf("expected business code %d, got %d", response.CodeReadinessFailed, body.Code)
 	}
 }
+
+func TestRegistrationRouteCanBeDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	disabled := false
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", nil)
+
+	SetupRouter(nil, testLogger(), &auth.TokenManager{}, AuthRuntime{
+		RegistrationEnabled: &disabled,
+	}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
+	}
+}

@@ -1,11 +1,10 @@
-# deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: go-user-system
   namespace: go-user-system
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: go-user-system
@@ -14,35 +13,28 @@ spec:
       labels:
         app: go-user-system
     spec:
-      # --- Init container: runs database migrations before the app starts ---
-      initContainers:
-        - name: db-migrate
-          image: go-user-system:latest
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1
           imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              echo "==> Running goose migrations (will retry until MySQL is ready)..."
-              export GOOSE_DRIVER=mysql
-              export GOOSE_DBSTRING="${DB_USER}:${DB_PASSWORD}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true&multiStatements=true"
-              export GOOSE_MIGRATION_DIR=/app/migrations
-              RETRIES=0
-              MAX_RETRIES=60
-              until goose -no-color up; do
-                RETRIES=$((RETRIES + 1))
-                if [ $RETRIES -ge $MAX_RETRIES ]; then
-                  echo "ERROR: Migration failed after $MAX_RETRIES attempts. Exiting."
-                  exit 1
-                fi
-                echo "    Attempt $RETRIES/$MAX_RETRIES failed, retrying in 5s..."
-                sleep 5
-              done
-              echo "==> Migrations complete."
-          envFrom:
-            - secretRef:
-                name: go-user-system-secret
+          ports:
+            - name: http
+              containerPort: 8082
           env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: go-user-system-secret
+                  key: DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: go-user-system-secret
+                  key: JWT_SECRET
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:
@@ -63,40 +55,53 @@ spec:
                 configMapKeyRef:
                   name: go-user-system-config
                   key: DB_NAME
-      containers:
-        - name: app
-          image: go-user-system:latest
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8082
-          envFrom:
-            - secretRef:
-                name: go-user-system-secret
-            - configMapRef:
-                name: go-user-system-config
+            - name: REGISTRATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: REGISTRATION_ENABLED
+            - name: REDIS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: REDIS_ENABLED
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: REDIS_ADDR
           resources:
             requests:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "100m"
+              memory: "128Mi"
             limits:
               cpu: "1000m"
-              memory: "1Gi"
+              memory: "512Mi"
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8082
-            initialDelaySeconds: 10
-            periodSeconds: 30
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /livez
-              port: 8082
-            initialDelaySeconds: 15
-            periodSeconds: 30
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
           volumeMounts:
             - name: config
               mountPath: /app/config.yml
               subPath: config.yml
+              readOnly: true
       volumes:
         - name: config
           configMap:

@@ -14,8 +14,9 @@ import (
 )
 
 type AuthRuntime struct {
-	StateStore     authstate.Store
-	LoginRateLimit service.LoginRateLimit
+	StateStore          authstate.Store
+	LoginRateLimit      service.LoginRateLimit
+	RegistrationEnabled *bool
 }
 
 func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) *gin.Engine {
@@ -41,7 +42,11 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 
 	registerHealthRoutes(r, healthHandler)
 	registerSwaggerRoutes(r)
-	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, authService, rbacService)
+	registrationEnabled := true
+	if len(runtimes) > 0 && runtimes[0].RegistrationEnabled != nil {
+		registrationEnabled = *runtimes[0].RegistrationEnabled
+	}
+	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, authService, rbacService, registrationEnabled)
 
 	return r
 }
@@ -59,18 +64,21 @@ func registerAPIRoutes(
 	tokenManager *auth.TokenManager,
 	authService *service.AuthService,
 	rbacService *service.RBACService,
+	registrationEnabled bool,
 ) {
 	apiV1 := rg.Group("/api/v1")
 
-	registerAuthRoutes(apiV1, userHandler)
+	registerAuthRoutes(apiV1, userHandler, registrationEnabled)
 	registerUsersRoutes(apiV1, userHandler, rbacHandler, tokenManager, authService, rbacService)
 	registerAdminRoutes(apiV1, rbacHandler, tokenManager, authService, rbacService)
 }
 
-func registerAuthRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler) {
+func registerAuthRoutes(rg *gin.RouterGroup, userHandler *handler.UserHandler, registrationEnabled bool) {
 	auth := rg.Group("/auth")
 	{
-		auth.POST("/register", userHandler.RegisterHandler)
+		if registrationEnabled {
+			auth.POST("/register", userHandler.RegisterHandler)
+		}
 		auth.POST("/login", userHandler.LoginHandler)
 		auth.POST("/refresh", userHandler.RefreshTokenHandler)
 		auth.POST("/logout", userHandler.LogoutHandler)

@@ -36,7 +36,6 @@ type userStore interface {
 	UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error
 	ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error)
 	UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error
-	CountUsers(ctx context.Context, db *gorm.DB) (int64, error)
 }
 
 type daoUserStore struct{}
@@ -75,8 +74,4 @@ func (daoUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset int
 
 func (daoUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
 	return dao.UserDisabled(ctx, db, userID)
-}
-
-func (daoUserStore) CountUsers(ctx context.Context, db *gorm.DB) (int64, error) {
-	return dao.CountUsers(ctx, db)
 }

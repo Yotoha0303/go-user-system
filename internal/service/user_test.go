@@ -127,8 +127,6 @@ type fakeUserStore struct {
 	updateUserPasswordByUserIDErr error
 	oldPasswordHash               string
 	newPasswordHash               string
-	userCount                     int64
-	countUsersErr                 error
 }
 
 type fakeRBACRepo struct {
@@ -185,10 +183,6 @@ func (s *fakeUserStore) ListUser(ctx context.Context, db *gorm.DB, limit, offset
 // TODO
 func (s *fakeUserStore) UserDisabled(ctx context.Context, db *gorm.DB, userID int64) error {
 	return nil
-}
-
-func (s *fakeUserStore) CountUsers(ctx context.Context, db *gorm.DB) (int64, error) {
-	return s.userCount, s.countUsersErr
 }
 
 func (r *fakeRBACRepo) AssignRoleToUserByCode(ctx context.Context, db *gorm.DB, userID int64, roleCode string) error {
@@ -443,7 +437,6 @@ func TestRegisterCreatesActiveUserWithTrimmedUsernameAndHashedPassword(t *testin
 func TestRegisterAssignsUserRoleToRegularUser(t *testing.T) {
 	store := &fakeUserStore{
 		userByUsernameErr: gorm.ErrRecordNotFound,
-		userCount:         3,
 	}
 	rbacRepo := &fakeRBACRepo{}
 	userService := newUnitUserService(store)
@@ -463,10 +456,9 @@ func TestRegisterAssignsUserRoleToRegularUser(t *testing.T) {
 	}
 }
 
-func TestRegisterAssignsAdminRoleToFirstUser(t *testing.T) {
+func TestRegisterAssignsOnlyUserRoleToFirstUser(t *testing.T) {
 	store := &fakeUserStore{
 		userByUsernameErr: gorm.ErrRecordNotFound,
-		userCount:         0,
 	}
 	rbacRepo := &fakeRBACRepo{}
 	userService := newUnitUserService(store)
@@ -481,11 +473,8 @@ func TestRegisterAssignsAdminRoleToFirstUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register failed: %v", err)
 	}
-	if len(rbacRepo.assignedRoleCodes) != 2 {
-		t.Fatalf("expected two roles, got %v", rbacRepo.assignedRoleCodes)
-	}
-	if rbacRepo.assignedRoleCodes[0] != model.RoleCodeUser || rbacRepo.assignedRoleCodes[1] != model.RoleCodeAdmin {
-		t.Fatalf("expected user and admin roles, got %v", rbacRepo.assignedRoleCodes)
+	if len(rbacRepo.assignedRoleCodes) != 1 || rbacRepo.assignedRoleCodes[0] != model.RoleCodeUser {
+		t.Fatalf("expected only user role, got %v", rbacRepo.assignedRoleCodes)
 	}
 }
 
@@ -873,8 +862,8 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 		Pluck("r.code", &roleCodes).Error; err != nil {
 		t.Fatalf("list registered user roles failed: %v", err)
 	}
-	if len(roleCodes) != 2 || roleCodes[0] != model.RoleCodeAdmin || roleCodes[1] != model.RoleCodeUser {
-		t.Fatalf("expected first user roles [admin user], got %v", roleCodes)
+	if len(roleCodes) != 1 || roleCodes[0] != model.RoleCodeUser {
+		t.Fatalf("expected registered user role [user], got %v", roleCodes)
 	}
 
 	err = userService.Register(ctx, request.RegisterRequest{

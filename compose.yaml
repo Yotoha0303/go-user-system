@@ -1,70 +1,25 @@
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: go-user-system-backend
-    image: yotoha/go-user-system:dev   # 可通过环境变量覆盖
-    ports:
-      - "8082:8082"
-    environment:
-      DB_HOST: mysql
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      APP_PORT: "8082"
-      REDIS_ENABLED: "true"
-      REDIS_ADDR: redis:6379
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/readyz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    restart: unless-stopped
-    # 生产级资源限制（可按需调整）
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
+name: go-user-system
 
+services:
   mysql:
     image: mysql:8.4
-    container_name: go-user-system-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
       MYSQL_DATABASE: go_user_system
+      MYSQL_USER: go_user_system
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 20
-      start_period: 10s
+      retries: 30
+      start_period: 15s
     restart: unless-stopped
-    # 生产级资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
 
   redis:
     image: redis:7.4-alpine
-    container_name: go-user-system-redis
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -75,18 +30,77 @@ services:
       retries: 20
       start_period: 5s
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
 
-networks:
-  default:
-    driver: bridge
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: go-user-system-backend:dev
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        goose -dir /app/migrations mysql
+        "$${DB_USER}:$${DB_PASSWORD}@tcp($${DB_HOST}:$${DB_PORT})/$${DB_NAME}?parseTime=true&multiStatements=true"
+        up
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: go_user_system
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_NAME: go_user_system
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: go-user-system-backend:dev
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8082}:8082"
+    environment:
+      APP_PORT: "8082"
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: go_user_system
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_NAME: go_user_system
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      REDIS_ENABLED: "true"
+      REDIS_ADDR: redis:6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: go-user-system-frontend:dev
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
 
 volumes:
   mysql_data:

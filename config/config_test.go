@@ -92,6 +92,35 @@ func TestLoadRejectsInvalidRedisEnabledEnvironment(t *testing.T) {
 	}
 }
 
+func TestRegistrationDefaultsToEnabled(t *testing.T) {
+	cfg, err := Load(writeTempConfig(t, validConfigYAML()))
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+	if !cfg.Auth.RegistrationEnabled() {
+		t.Fatal("expected registration to be enabled by default")
+	}
+}
+
+func TestLoadAppliesRegistrationEnvironment(t *testing.T) {
+	t.Setenv("REGISTRATION_ENABLED", "false")
+	cfg, err := Load(writeTempConfig(t, validConfigYAML()))
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+	if cfg.Auth.RegistrationEnabled() {
+		t.Fatal("expected registration to be disabled")
+	}
+}
+
+func TestLoadRejectsInvalidRegistrationEnvironment(t *testing.T) {
+	t.Setenv("REGISTRATION_ENABLED", "not-a-bool")
+	_, err := Load(writeTempConfig(t, validConfigYAML()))
+	if err == nil || !strings.Contains(err.Error(), "REGISTRATION_ENABLED") {
+		t.Fatalf("expected REGISTRATION_ENABLED error, got %v", err)
+	}
+}
+
 func TestLoadReadsConfigFile(t *testing.T) {
 	path := writeTempConfig(t, validConfigYAML())
 

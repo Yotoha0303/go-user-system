@@ -11,7 +11,7 @@ data:
     mysql:
       host: go-user-system-mysql
       port: "3306"
-      user: root
+      user: go_user_system
       database: go_user_system
       maxOpenConns: 10
       maxIdleConns: 5
@@ -31,6 +31,8 @@ data:
       accessTokenExpireMinutes: 15
       refreshTokenExpireHours: 168
     auth:
+      registration:
+        enabled: true
       loginRateLimit:
         accountLimit: 5
         ipLimit: 20
@@ -43,11 +45,10 @@ data:
         readHeaderTimeout: 2s
         maxHeaderBytesKib: 128
         timeout: 5s
-  # --- Init container env vars (flat keys for env var consumption) ---
-  # Keep these in sync with the config.yml mysql block above.
   DB_HOST: "go-user-system-mysql"
   DB_PORT: "3306"
-  DB_USER: "root"
+  DB_USER: "go_user_system"
   DB_NAME: "go_user_system"
+  REGISTRATION_ENABLED: "true"
   REDIS_ENABLED: "true"
   REDIS_ADDR: "go-user-system-redis:6379"

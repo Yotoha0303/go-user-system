@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: go-user-system-bootstrap-admin
+  namespace: go-user-system
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: go-user-system-bootstrap-admin
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap-admin
+          image: ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1
+          imagePullPolicy: IfNotPresent
+          args: ["bootstrap-admin"]
+          envFrom:
+            - secretRef:
+                name: go-user-system-bootstrap
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: go-user-system-secret
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: DB_NAME
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true

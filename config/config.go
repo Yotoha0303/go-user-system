@@ -51,7 +51,16 @@ type RedisConfig struct {
 }
 
 type AuthConfig struct {
+	Registration   RegistrationConfig   `yaml:"registration"`
 	LoginRateLimit LoginRateLimitConfig `yaml:"loginRateLimit"`
+}
+
+type RegistrationConfig struct {
+	Enabled *bool `yaml:"enabled"`
+}
+
+func (c AuthConfig) RegistrationEnabled() bool {
+	return c.Registration.Enabled == nil || *c.Registration.Enabled
 }
 
 type LoginRateLimitConfig struct {
@@ -409,6 +418,14 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("invalid JWT_REFRESH_TOKEN_EXPIRE_HOURS: %w", err)
 		}
 		cfg.JWT.RefreshTokenExpireHours = hours
+	}
+
+	if v := os.Getenv("REGISTRATION_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid REGISTRATION_ENABLED: %w", err)
+		}
+		cfg.Auth.Registration.Enabled = &enabled
 	}
 	return nil
 }

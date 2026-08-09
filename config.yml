@@ -23,6 +23,8 @@ jwt:
   accessTokenExpireMinutes: 15
   refreshTokenExpireHours: 168
 auth:
+  registration:
+    enabled: true
   loginRateLimit:
     accountLimit: 5
     ipLimit: 20

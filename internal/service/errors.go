@@ -1,12 +1,16 @@
 package service
 
 import (
+	"errors"
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/response"
 	"net/http"
 )
 
 var (
+	ErrAdminAlreadyBootstrapped = errors.New("administrator has already been bootstrapped")
+	ErrRBACNotInitialized       = errors.New("RBAC roles are not initialized; run database migrations first")
+
 	ErrUsernameTooShort = apperror.New(
 		http.StatusBadRequest,
 		response.CodeInvalidParams,
