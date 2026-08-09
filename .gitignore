@@ -3,6 +3,7 @@
 !.env.*.example
 
 config.local.yml
+k8s/secret.yaml
 
 bin/*
 !bin/.gitkeep
