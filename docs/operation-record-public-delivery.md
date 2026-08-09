@@ -8,10 +8,13 @@
 | 基线提交 | `1b4a75f0ceff550e06c8cabbb28a1e8bb96e4477` |
 | 基线标签 | `delivery-baseline-2026-08-09` |
 | 实施分支 | `agent/public-delivery` |
-| 目标版本 | `v1.0.0-rc.1` |
+| 合并 PR | [#3](https://github.com/Yotoha0303/go-user-system/pull/3) |
+| 合并提交 | `e532bab584312fb867ac3167715d07b5c3ca5aa5` |
+| 初始候选版本 | [`v1.0.0-rc.1`](https://github.com/Yotoha0303/go-user-system/releases/tag/v1.0.0-rc.1) |
+| 安全补丁候选版本 | `v1.0.0-rc.2` |
 | 实施日期 | `2026-08-10` |
 
-基线标签用于回看本次公开交付前的状态；候选版本标签将在全部本地和远程门禁通过、合并 `main` 后创建。
+基线标签用于回看本次公开交付前的状态；候选版本标签在本地验收、PR 门禁、合并后主分支 CI 和 CodeQL 全部通过后创建。
 
 实施提交：
 
@@ -19,6 +22,9 @@
 | --- | --- |
 | `c912ab4` | 全栈运行时、前端纳入仓库、管理员初始化、Compose/Kubernetes 和依赖升级 |
 | `21d8a73` | CI、CodeQL、Dependabot、gitleaks 和候选版本发布流水线 |
+| `ee64107` | README、部署文档、交付记录、社区文件和版本说明 |
+| `c527d62` | E2E 清理环境和 Go CodeQL 构建模式修复 |
+| `bac9fe0` | 合并、CI、发布和制品校验结果的文档收尾记录 |
 
 ## 问题、原因与修改
 
@@ -31,6 +37,7 @@
 | Ingress 破坏 API 路径 | 全局 rewrite 把 `/api/v1` 改成 `/` | 删除 rewrite，使用 Prefix 原样转发 |
 | 每个 Pod 都执行 migration | 多副本 initContainer 会并发升级数据库 | 独立版本化 Job，部署脚本等待成功后再更新应用 |
 | 依赖存在高危漏洞 | Go 与 npm 锁定版本已过期 | 升级补丁版本并增加 govulncheck、npm audit、CodeQL、Dependabot |
+| `rc.1` 发布后出现低危告警 | GitHub Advisory Database 新报告 `edwards25519 < 1.1.1` 问题 | 升级到 1.1.1，并以 `v1.0.0-rc.2` 重新发布所有制品 |
 | 公共维护信息不足 | 缺许可证、安全策略、贡献流程和版本规划 | 增加 MIT、Security、Contributing、模板、Changelog 和 Roadmap |
 
 ## 本地验收记录
@@ -63,4 +70,19 @@ npm run test:e2e
 - kubeconform 校验 17 个资源全部有效；当前工作树 gitleaks 扫描无泄漏。
 - Go lint、test、race、vet、build、Goose 和 govulncheck 通过；前端 lint、8 个单元测试、build 和 npm audit 通过。
 
-远程 CI、合并提交、候选标签和 Release 状态以 GitHub Actions 与 Release 页面为最终证据。
+## 远程验收记录
+
+- PR #3 的后端、前端、部署清单、Playwright E2E、Go CodeQL 和 JavaScript CodeQL 全部通过后，以 merge commit 合并。
+- 合并提交的 [主分支 CI](https://github.com/Yotoha0303/go-user-system/actions/runs/31326670292) 和 [CodeQL](https://github.com/Yotoha0303/go-user-system/actions/runs/31326670295) 均通过；E2E 为 2 项通过并成功清理 Compose 资源。
+- [`v1.0.0-rc.1` 发布工作流](https://github.com/Yotoha0303/go-user-system/actions/runs/31327121410) 通过，GitHub prerelease 包含 Linux amd64、Linux arm64、Windows amd64、前端静态包和校验和文件。
+- 逐项下载 4 个归档并与 `checksums.txt` 比对，SHA-256 全部匹配。
+- `ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1` 和 `ghcr.io/yotoha0303/go-user-system-frontend:v1.0.0-rc.1` 可匿名读取，均包含 `linux/amd64` 与 `linux/arm64`。
+- `main` 已要求 PR、分支同步、6 项状态检查和讨论解决，并禁止强推和删除；漏洞告警、Dependabot 安全更新和私密漏洞报告已启用。
+- `rc.1` 发布后发现的低危 Dependabot 告警已在补丁候选 `v1.0.0-rc.2` 中修复；该标签用于追溯包含补丁的最终合并提交。
+
+## 已知后续项
+
+- 旧 Git 历史曾包含 Kubernetes Secret 示例。当前分支已删除该文件并使用示例占位值，但公开历史不可视为秘密存储；任何曾使用过的同值凭据必须轮换。
+- `govulncheck` 对代码路径和导入包报告 0 漏洞；依赖图中的 `golang.org/x/crypto/openpgp` 有无修复版本的模块级公告，但项目没有导入或调用该包，后续继续跟踪上游处理。
+- 后端多架构镜像首次无缓存构建约 21 分钟，功能正确但发布效率需要通过原生构建平台交叉编译优化。
+- Dependabot 首次扫描创建的其余依赖升级 PR 应逐项评估兼容性并通过现有门禁合并，不应直接批量升级主版本。

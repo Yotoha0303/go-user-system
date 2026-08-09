@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 See `ROADMAP.md` for planned work.
 
+## [1.0.0-rc.2] - 2026-08-10
+
+### Changed
+
+- Synchronized public delivery records and deployment defaults after the initial release.
+
+### Security
+
+- Updated `filippo.io/edwards25519` to 1.1.1 to resolve the low-severity Dependabot alert reported after `rc.1`.
+
 ## [1.0.0-rc.1] - 2026-08-10
 
 ### Added
