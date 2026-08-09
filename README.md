@@ -6,7 +6,7 @@
 
 一个可自托管的全栈用户认证与 RBAC 项目。后端使用 Go、Gin、GORM、MySQL 和 Redis，前端使用 React、TypeScript 和 Vite。项目提供可重复的数据库迁移、完整容器栈、Kubernetes 清单、自动化测试和发布流水线。
 
-当前公开交付版本为 `v1.0.0-rc.1`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
+当前公开交付版本为 `v1.0.0-rc.2`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
 
 ![Go User System sign-in screen](docs/assets/application-home.png)
 

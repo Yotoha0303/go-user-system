@@ -17,6 +17,7 @@
 | GitHub 质量与发布 | 已完成 | CI、CodeQL、Dependabot、Release workflow |
 | 社区与维护文档 | 已完成 | License、Security、Contributing、模板、Roadmap |
 | 远程候选版本 | 已完成 | PR #3 合并为 `e532bab`，已推送并发布 `v1.0.0-rc.1` |
+| 低危依赖安全补丁 | 已完成 | `edwards25519` 升级到 1.1.1，部署默认值同步到 `v1.0.0-rc.2` |
 
 ## 明确不纳入候选版本
 

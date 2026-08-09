@@ -20,4 +20,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 
 LABEL org.opencontainers.image.source="https://github.com/Yotoha0303/go-user-system" \
   org.opencontainers.image.description="Go User System web client" \
-  org.opencontainers.image.version="1.0.0-rc.1"
+  org.opencontainers.image.version="1.0.0-rc.2"

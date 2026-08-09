@@ -5,8 +5,8 @@ IMAGE_NAME := go-user-system:dev
 K8S_DIR := k8s
 K8S_NAMESPACE := go-user-system
 K8S_DEPLOYMENT := go-user-system
-K8S_BACKEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1
-K8S_FRONTEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-frontend:v1.0.0-rc.1
+K8S_BACKEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.2
+K8S_FRONTEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-frontend:v1.0.0-rc.2
 KIND_NAME := go-user-system
 
 GOPATH := $(shell go env GOPATH)
@@ -258,7 +258,7 @@ k8s-deploy: k8s-namespace
 	kubectl wait --for=condition=available deployment/go-user-system-mysql -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl wait --for=condition=available deployment/go-user-system-redis -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl apply -f $(K8S_DIR)/migration-job.yaml
-	kubectl wait --for=condition=complete job/go-user-system-migrate-v1-0-0-rc-1 -n $(K8S_NAMESPACE) --timeout=600s
+	kubectl wait --for=condition=complete job/go-user-system-migrate-v1-0-0-rc-2 -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl apply -f $(K8S_DIR)/service.yaml
 	kubectl apply -f $(K8S_DIR)/frontend-service.yaml
 	kubectl apply -f $(K8S_DIR)/deployment.yaml

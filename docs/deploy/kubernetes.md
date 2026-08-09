@@ -1,6 +1,6 @@
 # Kubernetes 部署
 
-清单默认部署 `v1.0.0-rc.1` 的 GHCR 固定标签，包含 MySQL、Redis、单例 migration Job、两个后端副本、两个前端副本和 Nginx Ingress。
+清单默认部署 `v1.0.0-rc.2` 的 GHCR 固定标签，包含 MySQL、Redis、单例 migration Job、两个后端副本、两个前端副本和 Nginx Ingress。
 
 ## 前置条件
 
@@ -41,7 +41,7 @@ make k8s-deploy
 ```bash
 make k8s-status
 kubectl get job,pod,deploy,svc,ingress -n go-user-system
-kubectl logs job/go-user-system-migrate-v1-0-0-rc-1 -n go-user-system
+kubectl logs job/go-user-system-migrate-v1-0-0-rc-2 -n go-user-system
 ```
 
 ## 初始化管理员
