@@ -16,7 +16,7 @@
 | Kubernetes 可部署清单 | 已完成 | 固定 GHCR 镜像、Migration Job、正确 Ingress 路由 |
 | GitHub 质量与发布 | 已完成 | CI、CodeQL、Dependabot、Release workflow |
 | 社区与维护文档 | 已完成 | License、Security、Contributing、模板、Roadmap |
-| 远程候选版本 | 待最终合并 | 分支 CI 通过后合并 `main` 并推送 `v1.0.0-rc.1` |
+| 远程候选版本 | 已完成 | PR #3 合并为 `e532bab`，已推送并发布 `v1.0.0-rc.1` |
 
 ## 明确不纳入候选版本
 

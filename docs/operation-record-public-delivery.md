@@ -8,10 +8,12 @@
 | 基线提交 | `1b4a75f0ceff550e06c8cabbb28a1e8bb96e4477` |
 | 基线标签 | `delivery-baseline-2026-08-09` |
 | 实施分支 | `agent/public-delivery` |
-| 目标版本 | `v1.0.0-rc.1` |
+| 合并 PR | [#3](https://github.com/Yotoha0303/go-user-system/pull/3) |
+| 合并提交 | `e532bab584312fb867ac3167715d07b5c3ca5aa5` |
+| 候选版本 | [`v1.0.0-rc.1`](https://github.com/Yotoha0303/go-user-system/releases/tag/v1.0.0-rc.1) |
 | 实施日期 | `2026-08-10` |
 
-基线标签用于回看本次公开交付前的状态；候选版本标签将在全部本地和远程门禁通过、合并 `main` 后创建。
+基线标签用于回看本次公开交付前的状态；候选版本标签在本地验收、PR 门禁、合并后主分支 CI 和 CodeQL 全部通过后创建。
 
 实施提交：
 
@@ -19,6 +21,8 @@
 | --- | --- |
 | `c912ab4` | 全栈运行时、前端纳入仓库、管理员初始化、Compose/Kubernetes 和依赖升级 |
 | `21d8a73` | CI、CodeQL、Dependabot、gitleaks 和候选版本发布流水线 |
+| `ee64107` | README、部署文档、交付记录、社区文件和版本说明 |
+| `c527d62` | E2E 清理环境和 Go CodeQL 构建模式修复 |
 
 ## 问题、原因与修改
 
@@ -63,4 +67,17 @@ npm run test:e2e
 - kubeconform 校验 17 个资源全部有效；当前工作树 gitleaks 扫描无泄漏。
 - Go lint、test、race、vet、build、Goose 和 govulncheck 通过；前端 lint、8 个单元测试、build 和 npm audit 通过。
 
-远程 CI、合并提交、候选标签和 Release 状态以 GitHub Actions 与 Release 页面为最终证据。
+## 远程验收记录
+
+- PR #3 的后端、前端、部署清单、Playwright E2E、Go CodeQL 和 JavaScript CodeQL 全部通过后，以 merge commit 合并。
+- 合并提交的 [主分支 CI](https://github.com/Yotoha0303/go-user-system/actions/runs/31326670292) 和 [CodeQL](https://github.com/Yotoha0303/go-user-system/actions/runs/31326670295) 均通过；E2E 为 2 项通过并成功清理 Compose 资源。
+- [`v1.0.0-rc.1` 发布工作流](https://github.com/Yotoha0303/go-user-system/actions/runs/31327121410) 通过，GitHub prerelease 包含 Linux amd64、Linux arm64、Windows amd64、前端静态包和校验和文件。
+- 逐项下载 4 个归档并与 `checksums.txt` 比对，SHA-256 全部匹配。
+- `ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1` 和 `ghcr.io/yotoha0303/go-user-system-frontend:v1.0.0-rc.1` 可匿名读取，均包含 `linux/amd64` 与 `linux/arm64`。
+- `main` 已要求 PR、分支同步、6 项状态检查和讨论解决，并禁止强推和删除；漏洞告警、Dependabot 安全更新和私密漏洞报告已启用。
+
+## 已知后续项
+
+- 旧 Git 历史曾包含 Kubernetes Secret 示例。当前分支已删除该文件并使用示例占位值，但公开历史不可视为秘密存储；任何曾使用过的同值凭据必须轮换。
+- 后端多架构镜像首次无缓存构建约 21 分钟，功能正确但发布效率需要通过原生构建平台交叉编译优化。
+- Dependabot 首次扫描已创建依赖升级 PR，应逐项评估兼容性并通过现有门禁合并，不应直接批量升级主版本。
