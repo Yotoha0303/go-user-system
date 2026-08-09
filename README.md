@@ -13,7 +13,7 @@
 - 使用 `swaggo/swag` 注解生成 Swagger JSON、YAML 文档，并通过 `gin-swagger` 提供 `/swagger/index.html` 文档入口。
 - 使用 Goose 管理 SQL migration，不使用 GORM `AutoMigrate`。
 - 已接入 `Request ID`、结构化 access log、panic recovery 日志。
-- 已配置 HTTP server 超时、请求 context timeout、数据库连接池和启动时 DB ping timeout。
+- 已配置 HTTP server 超时、请求 context timeout、数据库连接池，以及 MySQL/Redis 启动 Ping timeout。
 - GitHub Actions CI 覆盖 golangci-lint、单元测试、race 测试、go vet、migration 校验、二进制构建和 Docker 镜像构建；本地 `make ci` 覆盖 lint、test、race-test、vet、build 和 docker-build。
 
 ## 技术栈
@@ -30,9 +30,9 @@
 | 接口文档 | swaggo / gin-swagger |
 | 配置 | `config.yml` + `.env` + 环境变量覆盖 |
 | 日志 | `log/slog` JSON 结构化日志 |
-| 测试 | Go testing、httptest、fake SQL driver、MySQL integration test |
+| 测试 | Go testing、httptest、fake SQL driver、miniredis、MySQL integration test |
 | 质量门禁 | golangci-lint v2、go test、go test -race、go vet |
-| 部署 | Docker、Docker Compose、GitHub Actions |
+| 部署 | Docker、Docker Compose、Kubernetes、GitHub Actions |
 
 ## 项目结构
 
@@ -95,6 +95,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 REDIS_ENABLED=false
 REDIS_ADDR=127.0.0.1:6379
+# REDIS_PASSWORD=
 REDIS_DB=0
 ```
 
@@ -178,6 +179,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 REDIS_ENABLED=false
 REDIS_ADDR=127.0.0.1:6379
+# REDIS_PASSWORD=
 REDIS_DB=0
 ```
 

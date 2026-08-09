@@ -85,7 +85,7 @@ docker compose ps
 
 - `go-user-system-mysql` 为 `healthy`。
 - `go-user-system-redis` 为 `healthy`。
-- `go-user-system-app` 为 `running` 或 `healthy`。
+- `go-user-system-backend` 为 `running` 或 `healthy`。
 
 查看日志：
 

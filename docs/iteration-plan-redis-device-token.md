@@ -4,9 +4,11 @@
 
 上一轮鉴权与 RBAC 迭代（见 `iteration-plan-auth-rbac-swagger.md`、`operation-record-auth-rbac-swagger.md`）已完成 JWT 双 Token、登出/轮换吊销、RBAC 五表与接口级鉴权。
 
-对照目标清单，**待补齐**项如下；本文档作为后续实现的设计与验收依据。
+对照目标清单，本文记录立项时的缺口，并作为分阶段实现与验收依据。
 
-## 现状对照
+> 状态更新（2026-08-09）：Redis 认证基础设施、Access JTI 吊销、登录限流和 Refresh Token Family 重放检测已在 `feat/production-auth-hardening` 完成，详见 `iteration-plan-production-auth-hardening.md` 与 `operation-record-production-auth-hardening.md`。登录设备字段、会话 API 和前端设备管理仍未实现，继续作为后续迭代范围。
+
+## 立项时现状对照（历史）
 
 | 目标 | 状态 | 当前证据 | 结论 |
 | --- | --- | --- | --- |
@@ -16,7 +18,7 @@
 | 登录设备管理 | ❌ 未实现 | `refresh_tokens` 无设备/IP/UA 字段；无设备列表/踢下线 API | **本轮补齐** |
 | RBAC 权限 | ✅ 已实现 | 五表 + `RequirePermission` + `/admin/*` 与前端权限页 | 无需本轮改动 |
 
-## 主要缺口
+## 主要缺口（立项时记录）
 
 ### 1. 无 Redis，无法支撑跨实例会话与 Access 吊销
 
@@ -157,7 +159,7 @@ PATCH /api/v1/users/me/update/password
 
 #### 数据模型扩展
 
-新增 migration（建议 `00006_add_refresh_token_device_fields.sql`）：
+新增 migration（建议 `00007_add_refresh_token_device_fields.sql`；`00006` 已用于生产认证加固）：
 
 ```sql
 -- +goose Up
@@ -292,18 +294,22 @@ PR5  前端设备管理页 + device_id 上报
 | 隐私（存 IP/UA） | 最小化字段；列表仅本人可见；文档说明保留期限可按 `expires_at` 清理 |
 | 旧客户端无 device_id | 字段可空；会话仍可按 jti 管理 |
 
-## 验证清单（合并后）
+## 验证清单
+
+已完成的生产认证加固：
 
 ```bash
-# 后端
-make migrate-up
+make migrate-validate
 make test
 make race-test
-# 手动：登录 → 刷新 → 登出 → 改密 → 列表会话 → 踢设备 → 再刷新应 401
+make vet
+docker compose config --quiet
+```
 
-# 基础设施
-docker compose up -d redis   # 或 compose 全量
-redis-cli PING
+后续设备管理迭代完成后还需验证：
+
+```text
+登录 -> 刷新 -> 查看会话列表 -> 踢指定设备 -> 被踢设备刷新返回 401
 ```
 
 ## 相关文件（实施时重点改动）
@@ -315,19 +321,22 @@ redis-cli PING
 | Auth | `internal/auth/token_manager.go`、`internal/service/auth.go`、`internal/handler/user_handler.go` |
 | 数据 | `migrations/`、`internal/model/refresh_token.go`、`internal/repository/refresh_token.go` |
 | 路由 | `router/router.go`、`docs/http/test.http`、Swagger 注解 |
-| 前端 | `src/api/*`、`src/pages/security/*`、登录页 device 上报 |
+| 前端 | 相邻 `go-user-system-frontend/src/api/*`、`src/pages/security/*`、登录页 device 上报 |
 
 ## 实施状态
 
 | 项 | 状态 | 备注 |
 | --- | --- | --- |
 | 文档立项 | 已完成 | 本文档 |
-| Redis 基础设施 | 待实现 | |
-| Access 吊销迁 Redis | 待实现 | |
+| Redis 基础设施 | 已完成 | Redis/内存 Store、配置、健康检查、Compose、Kubernetes |
+| Access 吊销迁 Redis | 已完成 | JTI 派生 Key + Token 剩余寿命 TTL；运行故障 fail-closed |
+| 登录失败限流 | 已完成 | 账号/IP 双维度，429 + `Retry-After` |
+| Refresh Family 重放检测 | 已完成 | `family_id`、`revoked_reason`、Family 级吊销 |
 | 设备字段与会话 API | 待实现 | |
 | 前端设备管理 | 待实现 | |
-| 操作记录 | 待写 | 完成后新增 `operation-record-redis-device-token.md` |
+| 已完成范围操作记录 | 已完成 | `operation-record-production-auth-hardening.md` |
+| 设备管理操作记录 | 待写 | 设备迭代完成后新增独立操作记录 |
 
 ---
 
-**记录说明**：本计划由现状核对得出（Refresh / RBAC 已完成；Redis、设备管理未完成；Token 注销需 Redis 化增强）。实施时按 PR 顺序落地，并在完成后补充 operation-record。
+**记录说明**：本计划最初由 2026-08-07 的现状核对得出。2026-08-09 已完成 Redis、Access 吊销和 Refresh Family 加固；设备管理仍按本文 C 部分另行迭代。
