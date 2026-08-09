@@ -16,7 +16,9 @@ import (
 type Config struct {
 	Server     ServerConfig `yaml:"server"`
 	MySQL      MySQLConfig  `yaml:"mysql"`
+	Redis      RedisConfig  `yaml:"redis"`
 	JWT        JWTConfig    `yaml:"jwt"`
+	Auth       AuthConfig   `yaml:"auth"`
 	HttpServer HttpServer   `yaml:"http"`
 }
 
@@ -35,6 +37,27 @@ type MySQLConfig struct {
 	ConnMaxLifetime time.Duration `yaml:"connMaxLifeTime"`
 	ConnMaxIdleTime time.Duration `yaml:"connMaxIdleTime"`
 	PingTimeout     time.Duration `yaml:"pingTimeout"`
+}
+
+type RedisConfig struct {
+	Enabled      bool          `yaml:"enabled"`
+	Address      string        `yaml:"address"`
+	Password     string        `yaml:"-"`
+	DB           int           `yaml:"db"`
+	DialTimeout  time.Duration `yaml:"dialTimeout"`
+	ReadTimeout  time.Duration `yaml:"readTimeout"`
+	WriteTimeout time.Duration `yaml:"writeTimeout"`
+	PingTimeout  time.Duration `yaml:"pingTimeout"`
+}
+
+type AuthConfig struct {
+	LoginRateLimit LoginRateLimitConfig `yaml:"loginRateLimit"`
+}
+
+type LoginRateLimitConfig struct {
+	AccountLimit int64         `yaml:"accountLimit"`
+	IPLimit      int64         `yaml:"ipLimit"`
+	Window       time.Duration `yaml:"window"`
 }
 
 type JWTConfig struct {
@@ -78,6 +101,10 @@ var (
 	ErrMySQLInvalidConnMaxIdleTime        = errors.New("invalid mysql conn max idle time")
 	ErrMySQLInvalidConnMaxLifetime        = errors.New("invalid mysql conn max life time")
 	ErrMySQLInvalidPingTimeout            = errors.New("invalid mysql conn ping time out")
+	ErrRedisAddressEmpty                  = errors.New("redis address is empty")
+	ErrRedisDBInvalid                     = errors.New("redis db is invalid")
+	ErrRedisTimeoutInvalid                = errors.New("redis timeout is invalid")
+	ErrLoginRateLimitInvalid              = errors.New("login rate limit is invalid")
 )
 
 func (c Config) Validate() error {
@@ -85,6 +112,7 @@ func (c Config) Validate() error {
 	mysql := c.MySQL
 	jwt := c.JWT
 	http := c.HttpServer.Server
+	loginRateLimit := c.Auth.LoginRateLimit
 
 	if server.Port <= 0 {
 		return ErrInvalidServerPort
@@ -169,6 +197,22 @@ func (c Config) Validate() error {
 
 	if mysql.PingTimeout <= 0 {
 		return ErrMySQLInvalidPingTimeout
+	}
+
+	if c.Redis.Enabled {
+		if c.Redis.Address == "" {
+			return ErrRedisAddressEmpty
+		}
+		if c.Redis.DB < 0 {
+			return ErrRedisDBInvalid
+		}
+		if c.Redis.DialTimeout <= 0 || c.Redis.ReadTimeout <= 0 || c.Redis.WriteTimeout <= 0 || c.Redis.PingTimeout <= 0 {
+			return ErrRedisTimeoutInvalid
+		}
+	}
+
+	if loginRateLimit.AccountLimit <= 0 || loginRateLimit.IPLimit <= 0 || loginRateLimit.Window <= 0 {
+		return ErrLoginRateLimitInvalid
 	}
 
 	return nil
@@ -318,6 +362,27 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.MySQL.Database = v
 	}
 
+	if v := os.Getenv("REDIS_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_ENABLED: %w", err)
+		}
+		cfg.Redis.Enabled = enabled
+	}
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		cfg.Redis.Address = v
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		cfg.Redis.Password = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		db, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_DB: %w", err)
+		}
+		cfg.Redis.DB = db
+	}
+
 	if v := os.Getenv("JWT_EXPIRE_HOURS"); v != "" {
 		hours, err := strconv.Atoi(v)
 		if err != nil {
@@ -351,6 +416,8 @@ func applyEnvOverrides(cfg *Config) error {
 func applyDefaults(cfg *Config) {
 	http := &cfg.HttpServer.Server
 	jwt := &cfg.JWT
+	redis := &cfg.Redis
+	loginRateLimit := &cfg.Auth.LoginRateLimit
 
 	if jwt.AccessTokenExpireMinutes == 0 && jwt.ExpireHours > 0 {
 		jwt.AccessTokenExpireMinutes = jwt.ExpireHours * 60
@@ -376,5 +443,31 @@ func applyDefaults(cfg *Config) {
 	}
 	if http.MaxHeaderBytesKib == 0 {
 		http.MaxHeaderBytesKib = 512
+	}
+
+	if redis.Address == "" {
+		redis.Address = "127.0.0.1:6379"
+	}
+	if redis.DialTimeout == 0 {
+		redis.DialTimeout = 3 * time.Second
+	}
+	if redis.ReadTimeout == 0 {
+		redis.ReadTimeout = 2 * time.Second
+	}
+	if redis.WriteTimeout == 0 {
+		redis.WriteTimeout = 2 * time.Second
+	}
+	if redis.PingTimeout == 0 {
+		redis.PingTimeout = 3 * time.Second
+	}
+
+	if loginRateLimit.AccountLimit == 0 {
+		loginRateLimit.AccountLimit = 5
+	}
+	if loginRateLimit.IPLimit == 0 {
+		loginRateLimit.IPLimit = 20
+	}
+	if loginRateLimit.Window == 0 {
+		loginRateLimit.Window = 15 * time.Minute
 	}
 }

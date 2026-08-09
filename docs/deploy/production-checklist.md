@@ -11,6 +11,7 @@
 - [ ] `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS` 与部署环境一致。
 - [ ] `APP_PORT` 和 `JWT_EXPIRE_HOURS` 是合法数字，避免启动时配置解析失败。
 - [ ] 日志中不会打印密码、JWT secret、access token、password hash。
+- [ ] `REDIS_ENABLED=true`，`REDIS_ADDR`、`REDIS_DB` 与部署环境一致，Redis 密码通过 `REDIS_PASSWORD` 注入（如启用认证）。
 
 ## 2. 构建与质量门禁
 
@@ -42,12 +43,15 @@
 - [ ] 服务收到 `SIGTERM` 后能优雅关闭 HTTP server 并释放数据库连接。
 - [ ] 已配置合理的重启策略。
 - [ ] 已确认 `config.yml` 随镜像复制，敏感信息通过环境变量注入。
+- [ ] Redis 不暴露公网端口，启用持久化并为数据目录配置持久卷。
+- [ ] Redis 重启后 Access JTI 吊销与登录限流状态能够恢复。
 
 ## 5. 超时与稳定性
 
 - [ ] HTTP server 已配置 `readTimeout`、`writeTimeout`、`idleTimeout`、`readHeaderTimeout`。
 - [ ] 请求级 `timeout` 已配置为合理值。
 - [ ] 数据库启动 ping 使用 `pingTimeout`。
+- [ ] Redis 启动 ping、读写超时已配置；故障时鉴权采用 fail-closed。
 - [ ] 已理解当前请求 timeout 是 context deadline，不会自动中断不检查 context 的 handler，也不会自动返回 504。
 - [ ] handler -> service -> dao 链路持续传递 `context.Context`。
 
@@ -62,8 +66,9 @@
 
 - [ ] `GET /ping` 返回 200。
 - [ ] `GET /livez` 返回 200。
-- [ ] `GET /readyz` 返回 200，且能证明数据库可访问。
+- [ ] `GET /readyz` 返回 200，且能证明 MySQL 与认证状态存储均可访问。
 - [ ] 注册、登录、鉴权、当前用户查询、昵称修改、密码修改链路验证通过。
+- [ ] 已验证改密后旧 Access/Refresh 失效、Refresh 重放吊销 Family、登录限流返回 429 与 `Retry-After`。
 - [ ] 应用日志中没有数据库连接失败或 JWT 配置缺失错误。
 
 ## 8. 回滚准备

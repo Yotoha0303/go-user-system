@@ -44,7 +44,20 @@ func withContext(ctx context.Context, db *gorm.DB) *gorm.DB {
 }
 
 func UpdateUserPasswordByUserID(ctx context.Context, db *gorm.DB, userID int64, oldPasswordHash, newPasswordHash string) error {
-	return withContext(ctx, db).Where("password_hash = ? and id = ?", oldPasswordHash, userID).Model(&model.User{}).Update("password_hash", newPasswordHash).Error
+	result := withContext(ctx, db).
+		Where("password_hash = ? and id = ?", oldPasswordHash, userID).
+		Model(&model.User{}).
+		Updates(map[string]interface{}{
+			"password_hash": newPasswordHash,
+			"auth_version":  gorm.Expr("auth_version + 1"),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func ListUser(ctx context.Context, db *gorm.DB, limit, offset int) (model.User, error) {

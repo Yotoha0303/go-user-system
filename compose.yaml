@@ -12,8 +12,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       APP_PORT: "8082"
+      REDIS_ENABLED: "true"
+      REDIS_ADDR: redis:6379
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/readyz"]
@@ -58,10 +62,32 @@ services:
           cpus: "0.5"
           memory: 256M
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: go-user-system-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
 networks:
   default:
     driver: bridge
 
 volumes:
   mysql_data:
-  app_data:   # 如需持久化应用数据可添加
+  redis_data:

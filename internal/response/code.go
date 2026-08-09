@@ -12,6 +12,7 @@ var (
 	CodeLoginFailed              = 2005
 	CodeUserPasswordNoDifference = 2006
 	CodeUpdateUserPasswordFailed = 2007
+	CodeLoginRateLimited         = 2008
 
 	CodeTokenGenerateFailed   = 3001
 	CodeTokenUserMissing      = 3002
@@ -36,6 +37,7 @@ var (
 	CodePermissionDenied       = 5003
 	CodeRoleNotFound           = 5004
 	CodeRBACFailed             = 5005
+	CodeAuthStateUnavailable   = 5006
 
 	CodeInternalError  = 6001
 	CodeRequestTimeout = 6002

@@ -68,6 +68,30 @@ func TestLoadAppliesJWTSecretFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadAppliesRedisEnvironment(t *testing.T) {
+	t.Setenv("REDIS_ENABLED", "true")
+	t.Setenv("REDIS_ADDR", "redis.internal:6379")
+	t.Setenv("REDIS_DB", "2")
+	path := writeTempConfig(t, validConfigYAML())
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+	if !cfg.Redis.Enabled || cfg.Redis.Address != "redis.internal:6379" || cfg.Redis.DB != 2 {
+		t.Fatalf("unexpected Redis config: %+v", cfg.Redis)
+	}
+}
+
+func TestLoadRejectsInvalidRedisEnabledEnvironment(t *testing.T) {
+	t.Setenv("REDIS_ENABLED", "not-a-bool")
+	path := writeTempConfig(t, validConfigYAML())
+
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "REDIS_ENABLED") {
+		t.Fatalf("expected REDIS_ENABLED error, got %v", err)
+	}
+}
+
 func TestLoadReadsConfigFile(t *testing.T) {
 	path := writeTempConfig(t, validConfigYAML())
 
@@ -129,6 +153,13 @@ func validConfig() Config {
 			RefreshTokenExpireHours:  168,
 			Secret:                   "test_jwt_secret_32_chars_long_for_testing",
 			Algorithm:                "HS256",
+		},
+		Auth: AuthConfig{
+			LoginRateLimit: LoginRateLimitConfig{
+				AccountLimit: 5,
+				IPLimit:      20,
+				Window:       15 * time.Minute,
+			},
 		},
 		HttpServer: HttpServer{
 			Server: HttpServerConfig{
@@ -307,6 +338,16 @@ func TestValidateConfig(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tt.expectErr, err)
 			}
 		})
+	}
+}
+
+func TestValidateRejectsEnabledRedisWithoutAddress(t *testing.T) {
+	cfg := validConfig()
+	cfg.Redis.Enabled = true
+	cfg.Redis.Address = ""
+
+	if err := cfg.Validate(); !errors.Is(err, ErrRedisAddressEmpty) {
+		t.Fatalf("expected ErrRedisAddressEmpty, got %v", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"go-user-system/internal/response"
 	"net/http"
 
@@ -8,12 +9,17 @@ import (
 	"gorm.io/gorm"
 )
 
-type HealthHandler struct {
-	db *gorm.DB
+type HealthChecker interface {
+	Ping(ctx context.Context) error
 }
 
-func NewHealthHandler(db *gorm.DB) *HealthHandler {
-	return &HealthHandler{db: db}
+type HealthHandler struct {
+	db       *gorm.DB
+	checkers []HealthChecker
+}
+
+func NewHealthHandler(db *gorm.DB, checkers ...HealthChecker) *HealthHandler {
+	return &HealthHandler{db: db, checkers: checkers}
 }
 
 // PingHandler godoc
@@ -67,6 +73,16 @@ func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 	if err := sqlDB.PingContext(c.Request.Context()); err != nil {
 		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
 		return
+	}
+
+	for _, checker := range h.checkers {
+		if checker == nil {
+			continue
+		}
+		if err := checker.Ping(c.Request.Context()); err != nil {
+			response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "authentication state store is not ready")
+			return
+		}
 	}
 
 	response.Success(c, gin.H{

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/model"
@@ -10,6 +11,7 @@ import (
 	"go-user-system/internal/response"
 	"go-user-system/internal/service"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -33,16 +35,20 @@ type UserService interface {
 
 type AuthSessionService interface {
 	StoreRefreshToken(ctx context.Context, token *model.RefreshToken) error
-	RotateRefreshToken(ctx context.Context, userID int64, oldJTI string, oldHash string, next *model.RefreshToken) error
+	RotateRefreshToken(ctx context.Context, userID int64, authVersion int64, oldJTI string, oldHash string, next *model.RefreshToken) error
 	RevokeRefreshToken(ctx context.Context, userID int64, jti string, tokenHash string) error
+	RevokeAccessToken(ctx context.Context, jti string, expiresAt time.Time) error
+	CheckLoginAllowed(ctx context.Context, account, ip string) (time.Duration, error)
+	RecordLoginFailure(ctx context.Context, account, ip string) (time.Duration, error)
+	ResetLoginFailures(ctx context.Context, account string) error
 }
 
 type UserHandler struct {
 	userService          UserService
 	authSessionService   AuthSessionService
-	tokenManager         *auth.TokenManager
-	generateToken        func(userID int64, username string) (string, error)
-	generateRefreshToken func(userID int64, username string) (*auth.IssuedToken, error)
+	generateToken        func(userID int64, username string, authVersion int64) (string, error)
+	generateRefreshToken func(userID int64, username string, authVersion int64) (*auth.IssuedToken, error)
+	parseAccessToken     func(tokenString string) (*auth.UserClaims, error)
 	parseRefreshToken    func(tokenString string) (*auth.UserClaims, error)
 	hashToken            func(token string) string
 	accessTokenExpiresIn func() int64
@@ -57,9 +63,9 @@ func NewUserHandler(userService UserService, tokenManager *auth.TokenManager, au
 	return &UserHandler{
 		userService:          userService,
 		authSessionService:   sessionService,
-		tokenManager:         tokenManager,
 		generateToken:        tokenManager.GenerateAccessToken,
 		generateRefreshToken: tokenManager.GenerateRefreshToken,
+		parseAccessToken:     tokenManager.ParseAccessToken,
 		parseRefreshToken:    tokenManager.ParseRefreshToken,
 		hashToken:            auth.HashToken,
 		accessTokenExpiresIn: func() int64 {
@@ -105,6 +111,7 @@ func (h *UserHandler) RegisterHandler(c *gin.Context) {
 // @Success 200 {object} response.Response{data=response.TokenAndUserInfoResponse}
 // @Failure 400 {object} response.Response
 // @Failure 401 {object} response.Response
+// @Failure 429 {object} response.Response
 // @Failure 500 {object} response.Response
 // @Router /api/v1/auth/login [post]
 func (h *UserHandler) LoginHandler(c *gin.Context) {
@@ -114,13 +121,41 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
+	loginIP := directClientIP(c.Request)
+	if h.authSessionService != nil {
+		retryAfter, err := h.authSessionService.CheckLoginAllowed(c.Request.Context(), req.Username, loginIP)
+		if err != nil {
+			handleError(c, err, response.CodeAuthStateUnavailable, "登录限流检查失败")
+			return
+		}
+		if respondLoginRateLimited(c, retryAfter) {
+			return
+		}
+	}
+
 	user, err := h.userService.Login(c.Request.Context(), req)
 	if err != nil {
+		if h.authSessionService != nil && errors.Is(err, service.ErrInvalidCredentials) {
+			retryAfter, rateErr := h.authSessionService.RecordLoginFailure(c.Request.Context(), req.Username, loginIP)
+			if rateErr != nil {
+				handleError(c, rateErr, response.CodeAuthStateUnavailable, "记录登录失败次数失败")
+				return
+			}
+			if respondLoginRateLimited(c, retryAfter) {
+				return
+			}
+		}
 		handleError(c, err, response.CodeLoginFailed, "登录错误")
 		return
 	}
+	if h.authSessionService != nil {
+		if err := h.authSessionService.ResetLoginFailures(c.Request.Context(), req.Username); err != nil {
+			handleError(c, err, response.CodeAuthStateUnavailable, "清理登录失败次数失败")
+			return
+		}
+	}
 
-	token, err := h.generateToken(user.ID, user.Username)
+	token, err := h.generateToken(user.ID, user.Username, user.AuthVersion)
 	if err != nil {
 		handleError(
 			c,
@@ -136,7 +171,7 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.generateRefreshToken(user.ID, user.Username)
+	refreshToken, err := h.generateRefreshToken(user.ID, user.Username, user.AuthVersion)
 	if err != nil {
 		handleError(
 			c,
@@ -209,7 +244,7 @@ func (h *UserHandler) RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := h.generateToken(claims.UserID, claims.Username)
+	accessToken, err := h.generateToken(claims.UserID, claims.Username, claims.AuthVersion)
 	if err != nil {
 		handleError(
 			c,
@@ -225,7 +260,7 @@ func (h *UserHandler) RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	nextRefreshToken, err := h.generateRefreshToken(claims.UserID, claims.Username)
+	nextRefreshToken, err := h.generateRefreshToken(claims.UserID, claims.Username, claims.AuthVersion)
 	if err != nil {
 		handleError(
 			c,
@@ -258,6 +293,7 @@ func (h *UserHandler) RefreshTokenHandler(c *gin.Context) {
 	if err := h.authSessionService.RotateRefreshToken(
 		c.Request.Context(),
 		claims.UserID,
+		claims.AuthVersion,
 		claims.JTI,
 		h.hashToken(refreshTokenValue),
 		refreshTokenModel(claims.UserID, nextRefreshToken, h.hashToken(nextRefreshToken.Token)),
@@ -317,6 +353,17 @@ func (h *UserHandler) LogoutHandler(c *gin.Context) {
 			"退出登录失败",
 		)
 		return
+	}
+
+	if accessClaims, ok := h.optionalAccessToken(c); ok {
+		if accessClaims.UserID != claims.UserID {
+			response.Fail(c, http.StatusUnauthorized, response.CodeTokenInvalid, "access token does not match refresh token")
+			return
+		}
+		if err := h.authSessionService.RevokeAccessToken(c.Request.Context(), accessClaims.JTI, accessClaims.ExpiresAt.Time); err != nil {
+			handleError(c, err, response.CodeAuthStateUnavailable, "吊销 access token 失败")
+			return
+		}
 	}
 
 	if err := h.authSessionService.RevokeRefreshToken(
@@ -450,6 +497,7 @@ func refreshTokenModel(userID int64, issuedToken *auth.IssuedToken, tokenHash st
 	return &model.RefreshToken{
 		UserID:    userID,
 		JTI:       issuedToken.JTI,
+		FamilyID:  issuedToken.JTI,
 		TokenHash: tokenHash,
 		ExpiresAt: issuedToken.ExpiresAt,
 	}
@@ -514,6 +562,52 @@ func requestIsHTTPS(req *http.Request) bool {
 	}
 	forwardedProto := strings.TrimSpace(strings.Split(req.Header.Get("X-Forwarded-Proto"), ",")[0])
 	return strings.EqualFold(forwardedProto, "https")
+}
+
+func directClientIP(req *http.Request) string {
+	if req == nil {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr))
+	if err == nil && host != "" {
+		return host
+	}
+	if remoteAddr := strings.TrimSpace(req.RemoteAddr); remoteAddr != "" {
+		return remoteAddr
+	}
+	return "unknown"
+}
+
+func respondLoginRateLimited(c *gin.Context, retryAfter time.Duration) bool {
+	if retryAfter <= 0 {
+		return false
+	}
+	seconds := int64((retryAfter + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	c.Header("Retry-After", fmt.Sprintf("%d", seconds))
+	handleError(c, service.ErrLoginRateLimited, response.CodeLoginRateLimited, "登录尝试过于频繁")
+	return true
+}
+
+func (h *UserHandler) optionalAccessToken(c *gin.Context) (*auth.UserClaims, bool) {
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	if authHeader == "" {
+		return nil, false
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return nil, false
+	}
+	tokenValue := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if tokenValue == "" {
+		return nil, false
+	}
+	claims, err := h.parseAccessToken(tokenValue)
+	if err != nil {
+		return nil, false
+	}
+	return claims, true
 }
 
 func handleRefreshTokenParseError(c *gin.Context, err error) {
@@ -584,21 +678,6 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	// Revoke the current access token to prevent it from being used after password change
-	if accessToken, exists := c.Get("access_token"); exists {
-		if tokenStr, ok := accessToken.(string); ok && tokenStr != "" {
-			h.RevokeCurrentAccessToken(tokenStr)
-		}
-	}
-
 	clearRefreshTokenCookie(c)
 	response.Success(c, nil)
-}
-
-// RevokeCurrentAccessToken revokes the current access token after password change
-// to prevent the old token from being used with the new password.
-func (h *UserHandler) RevokeCurrentAccessToken(token string) {
-	if h.tokenManager != nil {
-		h.tokenManager.RevokeAccessToken(token)
-	}
 }

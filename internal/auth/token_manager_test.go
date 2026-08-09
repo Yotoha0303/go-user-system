@@ -14,7 +14,6 @@ func newTestTokenManager(t *testing.T) *TokenManager {
 		"go-user-system-test",
 		time.Minute,
 		time.Hour,
-		true, // disable cleanup goroutine in tests
 	)
 	if err != nil {
 		t.Fatalf("new token manager failed: %v", err)
@@ -25,7 +24,7 @@ func newTestTokenManager(t *testing.T) *TokenManager {
 func TestTokenManagerIssuesAndParsesAccessToken(t *testing.T) {
 	manager := newTestTokenManager(t)
 
-	token, err := manager.GenerateAccessToken(7, "alice")
+	token, err := manager.GenerateAccessToken(7, "alice", 3)
 	if err != nil {
 		t.Fatalf("generate access token failed: %v", err)
 	}
@@ -44,12 +43,15 @@ func TestTokenManagerIssuesAndParsesAccessToken(t *testing.T) {
 	if claims.JTI == "" {
 		t.Fatal("expected jti to be set")
 	}
+	if claims.AuthVersion != 3 {
+		t.Fatalf("expected auth version 3, got %d", claims.AuthVersion)
+	}
 }
 
 func TestTokenManagerRejectsRefreshTokenAsAccessToken(t *testing.T) {
 	manager := newTestTokenManager(t)
 
-	refreshToken, err := manager.GenerateRefreshToken(7, "alice")
+	refreshToken, err := manager.GenerateRefreshToken(7, "alice", 1)
 	if err != nil {
 		t.Fatalf("generate refresh token failed: %v", err)
 	}
@@ -63,7 +65,7 @@ func TestTokenManagerRejectsRefreshTokenAsAccessToken(t *testing.T) {
 func TestTokenManagerRejectsAccessTokenAsRefreshToken(t *testing.T) {
 	manager := newTestTokenManager(t)
 
-	accessToken, err := manager.GenerateAccessToken(7, "alice")
+	accessToken, err := manager.GenerateAccessToken(7, "alice", 1)
 	if err != nil {
 		t.Fatalf("generate access token failed: %v", err)
 	}
@@ -71,6 +73,15 @@ func TestTokenManagerRejectsAccessTokenAsRefreshToken(t *testing.T) {
 	_, err = manager.ParseRefreshToken(accessToken)
 	if !errors.Is(err, ErrRefreshTokenInvalid) {
 		t.Fatalf("expected ErrRefreshTokenInvalid, got %v", err)
+	}
+}
+
+func TestTokenManagerRejectsInvalidAuthVersion(t *testing.T) {
+	manager := newTestTokenManager(t)
+
+	_, err := manager.GenerateAccessToken(7, "alice", 0)
+	if !errors.Is(err, ErrTokenVersionInvalid) {
+		t.Fatalf("expected ErrTokenVersionInvalid, got %v", err)
 	}
 }
 

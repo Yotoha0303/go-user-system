@@ -97,6 +97,24 @@ var (
 		"refresh token has been revoked",
 	)
 
+	ErrRefreshTokenReplay = apperror.New(
+		http.StatusUnauthorized,
+		response.CodeRefreshTokenRevoked,
+		"refresh token replay detected",
+	)
+
+	ErrAccessSessionInvalid = apperror.New(
+		http.StatusUnauthorized,
+		response.CodeTokenInvalid,
+		"access session is invalid",
+	)
+
+	ErrLoginRateLimited = apperror.New(
+		http.StatusTooManyRequests,
+		response.CodeLoginRateLimited,
+		"too many login attempts",
+	)
+
 	ErrPermissionDenied = apperror.New(
 		http.StatusForbidden,
 		response.CodePermissionDenied,

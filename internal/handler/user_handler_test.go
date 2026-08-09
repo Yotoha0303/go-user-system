@@ -261,10 +261,11 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 
 	fakeService := &fakeUserService{
 		loginUser: &model.User{
-			ID:       1,
-			Username: "alice",
-			Nickname: "alice",
-			Status:   model.UserStatusActive,
+			ID:          1,
+			Username:    "alice",
+			Nickname:    "alice",
+			Status:      model.UserStatusActive,
+			AuthVersion: 1,
 		},
 	}
 	userHandler := NewUserHandler(fakeService, testTokenManager(t))
@@ -314,15 +315,26 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 }
 
 type fakeAuthSessionService struct {
-	rotatedOldJTI string
-	revokedJTI    string
+	rotatedOldJTI    string
+	revokedJTI       string
+	revokedAccessJTI string
+	checkRetryAfter  time.Duration
+	recordRetryAfter time.Duration
+	checkErr         error
+	recordErr        error
+	resetErr         error
+	checkedAccount   string
+	checkedIP        string
+	recordedAccount  string
+	recordedIP       string
+	resetAccount     string
 }
 
 func (s *fakeAuthSessionService) StoreRefreshToken(ctx context.Context, token *model.RefreshToken) error {
 	return nil
 }
 
-func (s *fakeAuthSessionService) RotateRefreshToken(ctx context.Context, userID int64, oldJTI string, oldHash string, next *model.RefreshToken) error {
+func (s *fakeAuthSessionService) RotateRefreshToken(ctx context.Context, userID int64, authVersion int64, oldJTI string, oldHash string, next *model.RefreshToken) error {
 	s.rotatedOldJTI = oldJTI
 	return nil
 }
@@ -332,9 +344,31 @@ func (s *fakeAuthSessionService) RevokeRefreshToken(ctx context.Context, userID 
 	return nil
 }
 
+func (s *fakeAuthSessionService) RevokeAccessToken(ctx context.Context, jti string, expiresAt time.Time) error {
+	s.revokedAccessJTI = jti
+	return nil
+}
+
+func (s *fakeAuthSessionService) CheckLoginAllowed(ctx context.Context, account, ip string) (time.Duration, error) {
+	s.checkedAccount = account
+	s.checkedIP = ip
+	return s.checkRetryAfter, s.checkErr
+}
+
+func (s *fakeAuthSessionService) RecordLoginFailure(ctx context.Context, account, ip string) (time.Duration, error) {
+	s.recordedAccount = account
+	s.recordedIP = ip
+	return s.recordRetryAfter, s.recordErr
+}
+
+func (s *fakeAuthSessionService) ResetLoginFailures(ctx context.Context, account string) error {
+	s.resetAccount = account
+	return s.resetErr
+}
+
 func TestRefreshTokenHandlerReadsCookieAndRotatesCookie(t *testing.T) {
 	manager := testTokenManager(t)
-	issuedToken, err := manager.GenerateRefreshToken(7, "alice")
+	issuedToken, err := manager.GenerateRefreshToken(7, "alice", 1)
 	if err != nil {
 		t.Fatalf("generate refresh token failed: %v", err)
 	}
@@ -363,7 +397,7 @@ func TestRefreshTokenHandlerReadsCookieAndRotatesCookie(t *testing.T) {
 
 func TestLogoutHandlerReadsAndClearsCookie(t *testing.T) {
 	manager := testTokenManager(t)
-	issuedToken, err := manager.GenerateRefreshToken(7, "alice")
+	issuedToken, err := manager.GenerateRefreshToken(7, "alice", 1)
 	if err != nil {
 		t.Fatalf("generate refresh token failed: %v", err)
 	}
@@ -390,17 +424,119 @@ func TestLogoutHandlerReadsAndClearsCookie(t *testing.T) {
 	}
 }
 
+func TestLogoutHandlerRevokesPresentedAccessTokenJTI(t *testing.T) {
+	manager := testTokenManager(t)
+	refreshToken, err := manager.GenerateRefreshToken(7, "alice", 1)
+	if err != nil {
+		t.Fatalf("generate refresh token failed: %v", err)
+	}
+	accessToken, err := manager.GenerateAccessTokenIssue(7, "alice", 1)
+	if err != nil {
+		t.Fatalf("generate access token failed: %v", err)
+	}
+	sessionService := &fakeAuthSessionService{}
+	userHandler := NewUserHandler(&fakeUserService{}, manager, sessionService)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/logout", userHandler.LogoutHandler)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: refreshTokenCookieName, Value: refreshToken.Token})
+	req.Header.Set("Authorization", "Bearer "+accessToken.Token)
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if sessionService.revokedAccessJTI != accessToken.JTI {
+		t.Fatalf("expected access JTI %q revoked, got %q", accessToken.JTI, sessionService.revokedAccessJTI)
+	}
+}
+
+func TestLoginHandlerReturnsRateLimitWithRetryAfter(t *testing.T) {
+	fakeService := &fakeUserService{}
+	sessionService := &fakeAuthSessionService{checkRetryAfter: 90 * time.Second}
+	userHandler := NewUserHandler(fakeService, testTokenManager(t), sessionService)
+
+	recorder := performJSONRequest(
+		userHandler.LoginHandler,
+		http.MethodPost,
+		"/login",
+		`{"username":"alice","password":"wrong-password"}`,
+	)
+	body := decodeResponse(t, recorder)
+
+	if recorder.Code != http.StatusTooManyRequests || body.Code != response.CodeLoginRateLimited {
+		t.Fatalf("expected rate limit response, status=%d code=%d", recorder.Code, body.Code)
+	}
+	if recorder.Header().Get("Retry-After") != "90" {
+		t.Fatalf("expected Retry-After 90, got %q", recorder.Header().Get("Retry-After"))
+	}
+	if fakeService.loginCtx != nil {
+		t.Fatal("expected password verification skipped while limited")
+	}
+}
+
+func TestLoginHandlerRecordsInvalidCredentialsAndLimitsThresholdAttempt(t *testing.T) {
+	fakeService := &fakeUserService{loginErr: service.ErrInvalidCredentials}
+	sessionService := &fakeAuthSessionService{recordRetryAfter: time.Minute}
+	userHandler := NewUserHandler(fakeService, testTokenManager(t), sessionService)
+
+	recorder := performJSONRequest(
+		userHandler.LoginHandler,
+		http.MethodPost,
+		"/login",
+		`{"username":"alice","password":"wrong-password"}`,
+	)
+	body := decodeResponse(t, recorder)
+
+	if recorder.Code != http.StatusTooManyRequests || body.Code != response.CodeLoginRateLimited {
+		t.Fatalf("expected threshold attempt rate limited, status=%d code=%d", recorder.Code, body.Code)
+	}
+	if sessionService.recordedAccount != "alice" || sessionService.recordedIP == "" {
+		t.Fatalf("expected account and IP failure recorded, got account=%q ip=%q", sessionService.recordedAccount, sessionService.recordedIP)
+	}
+}
+
+func TestLoginHandlerClearsAccountFailuresAfterSuccess(t *testing.T) {
+	fakeService := &fakeUserService{loginUser: &model.User{
+		ID:          7,
+		Username:    "alice",
+		Nickname:    "alice",
+		Status:      model.UserStatusActive,
+		AuthVersion: 1,
+	}}
+	sessionService := &fakeAuthSessionService{}
+	userHandler := NewUserHandler(fakeService, testTokenManager(t), sessionService)
+
+	recorder := performJSONRequest(
+		userHandler.LoginHandler,
+		http.MethodPost,
+		"/login",
+		`{"username":"alice","password":"password123"}`,
+	)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if sessionService.resetAccount != "alice" {
+		t.Fatalf("expected alice failure counter reset, got %q", sessionService.resetAccount)
+	}
+}
+
 func TestLoginHandlerMapsTokenGenerationError(t *testing.T) {
 	fakeService := &fakeUserService{
 		loginUser: &model.User{
-			ID:       1,
-			Username: "alice",
-			Nickname: "alice",
-			Status:   model.UserStatusActive,
+			ID:          1,
+			Username:    "alice",
+			Nickname:    "alice",
+			Status:      model.UserStatusActive,
+			AuthVersion: 1,
 		},
 	}
 	userHandler := NewUserHandler(fakeService, testTokenManager(t))
-	userHandler.generateToken = func(userID int64, username string) (string, error) {
+	userHandler.generateToken = func(userID int64, username string, authVersion int64) (string, error) {
 		return "", errors.New("sign failed")
 	}
 

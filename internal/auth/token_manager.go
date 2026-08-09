@@ -14,7 +14,6 @@ import (
 var (
 	ErrAccessTokenInvalid   = errors.New("invalid access token")
 	ErrRefreshTokenInvalid  = errors.New("invalid refresh token")
-	ErrAccessTokenRevoked   = errors.New("access token has been revoked")
 	ErrJWTSecretTooShort    = errors.New("jwt secret must be at least 32 characters")
 	ErrJWTIssuerEmpty       = errors.New("jwt issuer empty")
 	ErrJWTExpireInvalid     = errors.New("jwt expire invalid")
@@ -24,6 +23,7 @@ var (
 	ErrTokenUsernameInvalid = errors.New("jwt token user name invalid")
 	ErrTokenTypeInvalid     = errors.New("jwt token type invalid")
 	ErrTokenJTIInvalid      = errors.New("jwt token jti invalid")
+	ErrTokenVersionInvalid  = errors.New("jwt token auth version invalid")
 )
 
 const (
@@ -37,14 +37,14 @@ type TokenManager struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	now        func() time.Time
-	blacklist  map[string]struct{}
 }
 
 type UserClaims struct {
-	Username  string `json:"username"`
-	UserID    int64  `json:"user_id"`
-	TokenType string `json:"token_type"`
-	JTI       string `json:"-"`
+	Username    string `json:"username"`
+	UserID      int64  `json:"user_id"`
+	TokenType   string `json:"token_type"`
+	AuthVersion int64  `json:"auth_version"`
+	JTI         string `json:"-"`
 	jwt.RegisteredClaims
 }
 
@@ -62,7 +62,7 @@ func NewTokenManager(
 	issuer string,
 	ttl time.Duration,
 ) (*TokenManager, error) {
-	return NewTokenManagerWithTTL(secret, issuer, ttl, ttl*7, false)
+	return NewTokenManagerWithTTL(secret, issuer, ttl, ttl*7)
 }
 
 func NewTokenManagerWithTTL(
@@ -70,7 +70,6 @@ func NewTokenManagerWithTTL(
 	issuer string,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
-	disableCleanup bool,
 ) (*TokenManager, error) {
 	secret = strings.TrimSpace(secret)
 
@@ -92,29 +91,24 @@ func NewTokenManagerWithTTL(
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 		now:        time.Now,
-		blacklist:  make(map[string]struct{}),
-	}
-
-	if !disableCleanup {
-		m.startBlacklistCleanup()
 	}
 	return m, nil
 }
 
-func (m *TokenManager) GenerateAccessToken(userID int64, username string) (string, error) {
-	issuedToken, err := m.generateToken(userID, username, TokenTypeAccess, m.accessTTL)
+func (m *TokenManager) GenerateAccessToken(userID int64, username string, authVersion int64) (string, error) {
+	issuedToken, err := m.generateToken(userID, username, authVersion, TokenTypeAccess, m.accessTTL)
 	if err != nil {
 		return "", err
 	}
 	return issuedToken.Token, nil
 }
 
-func (m *TokenManager) GenerateAccessTokenIssue(userID int64, username string) (*IssuedToken, error) {
-	return m.generateToken(userID, username, TokenTypeAccess, m.accessTTL)
+func (m *TokenManager) GenerateAccessTokenIssue(userID int64, username string, authVersion int64) (*IssuedToken, error) {
+	return m.generateToken(userID, username, authVersion, TokenTypeAccess, m.accessTTL)
 }
 
-func (m *TokenManager) GenerateRefreshToken(userID int64, username string) (*IssuedToken, error) {
-	return m.generateToken(userID, username, TokenTypeRefresh, m.refreshTTL)
+func (m *TokenManager) GenerateRefreshToken(userID int64, username string, authVersion int64) (*IssuedToken, error) {
+	return m.generateToken(userID, username, authVersion, TokenTypeRefresh, m.refreshTTL)
 }
 
 func (m *TokenManager) AccessTokenTTL() time.Duration {
@@ -125,16 +119,20 @@ func (m *TokenManager) RefreshTokenTTL() time.Duration {
 	return m.refreshTTL
 }
 
-func (m *TokenManager) generateToken(userID int64, username string, tokenType string, ttl time.Duration) (*IssuedToken, error) {
+func (m *TokenManager) generateToken(userID int64, username string, authVersion int64, tokenType string, ttl time.Duration) (*IssuedToken, error) {
+	if authVersion <= 0 {
+		return nil, ErrTokenVersionInvalid
+	}
 	now := m.now()
 	expiresAt := now.Add(ttl)
 	jti := uuid.NewString()
 
 	claims := UserClaims{
-		UserID:    userID,
-		Username:  username,
-		TokenType: tokenType,
-		JTI:       jti,
+		UserID:      userID,
+		Username:    username,
+		TokenType:   tokenType,
+		AuthVersion: authVersion,
+		JTI:         jti,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -220,9 +218,8 @@ func (m *TokenManager) parseToken(tokenString string) (*UserClaims, error) {
 		return nil, ErrTokenTypeInvalid
 	}
 
-	// Check if access token has been revoked (e.g. after password change)
-	if claims.TokenType == TokenTypeAccess && m.IsAccessTokenRevoked(tokenString) {
-		return nil, ErrAccessTokenRevoked
+	if claims.AuthVersion <= 0 {
+		return nil, ErrTokenVersionInvalid
 	}
 
 	// JTI is stored in standard claim ID; custom field is not serialized.
@@ -254,37 +251,4 @@ func claimsFromToken(token *jwt.Token) (*UserClaims, error) {
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
-}
-
-// RevokeAccessToken marks an access token as revoked so it cannot be used anymore.
-func (m *TokenManager) RevokeAccessToken(token string) {
-	if token != "" {
-		m.blacklist[token] = struct{}{}
-	}
-}
-
-// IsAccessTokenRevoked checks if the token has been revoked.
-func (m *TokenManager) IsAccessTokenRevoked(token string) bool {
-	if token == "" {
-		return true
-	}
-	_, ok := m.blacklist[token]
-	return ok
-}
-
-// startBlacklistCleanup starts a background goroutine to clean up expired blacklisted tokens.
-// (For production, consider using Redis instead of in-memory.)
-func (m *TokenManager) startBlacklistCleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		defer ticker.Stop()
-		for range ticker.C {
-			m.cleanupBlacklist()
-		}
-	}()
-}
-
-func (m *TokenManager) cleanupBlacklist() {
-	// In-memory blacklist will eventually be cleaned by TTL or memory pressure.
-	// For production use Redis.
 }

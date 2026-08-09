@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"errors"
+	"go-user-system/internal/apperror"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/response"
 	"net/http"
@@ -11,7 +13,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware(tokenManager *auth.TokenManager) gin.HandlerFunc {
+type AccessTokenValidator interface {
+	ValidateAccessToken(ctx context.Context, claims *auth.UserClaims) error
+}
+
+func AuthMiddleware(tokenManager *auth.TokenManager, validators ...AccessTokenValidator) gin.HandlerFunc {
+	var validator AccessTokenValidator
+	if len(validators) > 0 {
+		validator = validators[0]
+	}
+
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if strings.TrimSpace(authHeader) == "" {
@@ -49,9 +60,22 @@ func AuthMiddleware(tokenManager *auth.TokenManager) gin.HandlerFunc {
 			return
 		}
 
+		if validator != nil {
+			if err := validator.ValidateAccessToken(c.Request.Context(), claims); err != nil {
+				if appErr, ok := apperror.FromError(err); ok && appErr.HTTPStatus == http.StatusServiceUnavailable {
+					response.Fail(c, appErr.HTTPStatus, appErr.Code, appErr.Message)
+				} else {
+					response.Fail(c, http.StatusUnauthorized, response.CodeTokenInvalid, "invalid access session")
+				}
+				c.Abort()
+				return
+			}
+		}
+
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("access_token", tokenString)
+		c.Set("access_jti", claims.JTI)
 		c.Next()
 	}
 }

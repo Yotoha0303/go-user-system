@@ -17,6 +17,7 @@ type User struct {
 	PasswordHash string         `gorm:"size:255;not null" json:"-"`
 	Nickname     string         `gorm:"size:64;not null;default:''" json:"nickname"`
 	Status       int8           `gorm:"not null;default:1" json:"status"`
+	AuthVersion  int64          `gorm:"not null;default:1" json:"-"`
 	CreatedAt    time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	LastLoginAt  *time.Time     `gorm:"column:last_login_at" json:"last_login_at,omitempty"`

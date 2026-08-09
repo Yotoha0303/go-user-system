@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"go-user-system/config"
 	"go-user-system/internal/auth"
+	"go-user-system/internal/authstate"
 	"go-user-system/internal/middleware"
+	"go-user-system/internal/service"
 	"go-user-system/pkg/database"
+	"go-user-system/pkg/redisclient"
 	"go-user-system/router"
 	"log"
 	"log/slog"
@@ -26,14 +29,15 @@ type appServer interface {
 }
 
 type appDeps struct {
-	loadEnv         func() error
-	loadConfig      func(path string) (*config.Config, error)
-	initDB          func(cfg *config.Config) (*gorm.DB, error)
-	newTokenManager func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
-	setupRouter     func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler
-	newServer       func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
-	notify          func(c chan<- os.Signal, sig ...os.Signal)
-	shutdownTimeout time.Duration
+	loadEnv           func() error
+	loadConfig        func(path string) (*config.Config, error)
+	initDB            func(cfg *config.Config) (*gorm.DB, error)
+	newAuthStateStore func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error)
+	newTokenManager   func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
+	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler
+	newServer         func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
+	notify            func(c chan<- os.Signal, sig ...os.Signal)
+	shutdownTimeout   time.Duration
 }
 
 func defaultAppDeps() appDeps {
@@ -41,11 +45,24 @@ func defaultAppDeps() appDeps {
 		loadEnv:    config.LoadEnv,
 		loadConfig: config.Load,
 		initDB:     database.InitDB,
-		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
-			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL, false)
+		newAuthStateStore: func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error) {
+			if !cfg.Enabled {
+				return authstate.NewMemoryStore(), nil
+			}
+			client, err := redisclient.New(ctx, cfg)
+			if err != nil {
+				return nil, err
+			}
+			return authstate.NewRedisStore(client), nil
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
-			return router.SetupRouter(db, logger, tokenManager)
+		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
+			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL)
+		},
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler {
+			return router.SetupRouter(db, logger, tokenManager, router.AuthRuntime{
+				StateStore:     stateStore,
+				LoginRateLimit: loginRateLimit,
+			})
 		},
 		newServer: func(addr string, router http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
@@ -127,7 +144,21 @@ func run(deps appDeps) error {
 		return fmt.Errorf("new token manager failed: %w", err)
 	}
 
-	r := deps.setupRouter(db, slog, tokenManager)
+	authStateStore, err := deps.newAuthStateStore(context.Background(), cfg.Redis)
+	if err != nil {
+		return fmt.Errorf("initialize authentication state store failed: %w", err)
+	}
+	defer func() {
+		if err := authStateStore.Close(); err != nil {
+			logger.Error("close authentication state store failed", "error", err)
+		}
+	}()
+
+	r := deps.setupRouter(db, slog, tokenManager, authStateStore, service.LoginRateLimit{
+		AccountLimit: cfg.Auth.LoginRateLimit.AccountLimit,
+		IPLimit:      cfg.Auth.LoginRateLimit.IPLimit,
+		Window:       cfg.Auth.LoginRateLimit.Window,
+	})
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

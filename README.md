@@ -1,12 +1,13 @@
 # go-user-system
 
-基于 Go + Gin + GORM + MySQL 的用户认证系统。项目重点不是堆功能，而是把一个后端服务做成可运行、可测试、可部署、可复盘的工程化样板。
+基于 Go + Gin + GORM + MySQL + Redis 的用户认证系统。项目重点不是堆功能，而是把一个后端服务做成可运行、可测试、可部署、可复盘的工程化样板。
 
 ## 当前状态
 
 - 已实现用户注册、登录、双 Token 刷新、登出、当前用户查询、昵称修改、密码修改。
-- 修改密码后自动吊销 Access Token（防止旧 Token 被重用，已在 JWT 解析中检查）。
-- 使用 **JWT Access/Refresh 双 Token** 做接口鉴权，**Refresh Token 存储哈希并支持轮换、吊销**（已实现 Rotation）。
+- Access/Refresh Token 携带用户 `auth_version`；改密会在同一事务中递增版本并吊销全部 Refresh Token，禁用用户和旧版本 Token 会在鉴权时被拒绝。
+- 使用 **JWT Access/Refresh 双 Token** 做接口鉴权，**Refresh Token 只存哈希并支持 Rotation、Token Family 重放检测和 Family 级吊销**。
+- Redis 保存按 JTI 标识的 Access Token 吊销状态，并实现账号/IP 双维度登录失败限流；生产配置下 Redis 故障采用 fail-closed。
 - 基于 RBAC 五表模型实现角色、权限、用户角色、角色权限，并通过 Gin 中间件做接口级鉴权。
 - 使用统一响应结构、业务错误码和 `internal/apperror` 应用错误模型。
 - 使用 `swaggo/swag` 注解生成 Swagger JSON、YAML 文档，并通过 `gin-swagger` 提供 `/swagger/index.html` 文档入口。
@@ -22,6 +23,7 @@
 | Web 框架 | Gin |
 | ORM | GORM |
 | 数据库 | MySQL |
+| 认证状态 | Redis 7（本地测试可使用线程安全内存实现） |
 | Migration | goose |
 | 认证 | JWT Access/Refresh Token + bcrypt |
 | 权限 | RBAC 五表模型 |
@@ -40,6 +42,7 @@ config/                 配置加载、默认值、环境变量覆盖和校验
 internal/
   apperror/             应用错误模型
   auth/                 JWT 签发和解析
+  authstate/            Access 吊销与登录限流的 Redis/内存实现
   dao/                  数据访问层
   handler/              HTTP handler 和错误响应映射
   middleware/           Request ID、Access Log、Recovery、Timeout、Auth
@@ -51,6 +54,7 @@ internal/
   testutil/             MySQL 集成测试工具
 pkg/
   database/             MySQL / GORM 初始化
+  redisclient/          Redis 客户端初始化和启动健康检查
 router/                 路由注册
 migrations/             goose SQL migration
 docs/
@@ -89,6 +93,9 @@ DB_PASSWORD=your_mysql_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
+REDIS_ENABLED=false
+REDIS_ADDR=127.0.0.1:6379
+REDIS_DB=0
 ```
 
 修改 `.env.goose`，确保数据库密码与 `.env` 一致：
@@ -123,7 +130,7 @@ curl http://127.0.0.1:8082/readyz
 
 - 安装 Go。
 - 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@latest`。
-- 启动 MySQL。
+- 启动 MySQL；启用 `REDIS_ENABLED=true` 时还需启动 Redis。
 - 创建数据库 `go_user_system`。
 - 复制并配置 `.env` 和 `.env.goose`。
 
@@ -169,15 +176,19 @@ JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 JWT_EXPIRE_HOURS=24
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
+REDIS_ENABLED=false
+REDIS_ADDR=127.0.0.1:6379
+REDIS_DB=0
 ```
 
 配置加载规则：
 
 - 启动时加载 `.env`，再加载 `config.yml`。
-- `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_SECRET`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`、`JWT_REFRESH_TOKEN_EXPIRE_HOURS` 可覆盖 `config.yml`。
+- `APP_PORT`、数据库变量、JWT 变量以及 `REDIS_ENABLED`、`REDIS_ADDR`、`REDIS_PASSWORD`、`REDIS_DB` 可覆盖 `config.yml`。
 - `APP_PORT`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES` 和 `JWT_REFRESH_TOKEN_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
 - `JWT_SECRET` 会被加载进 `cfg.JWT.Secret` 后再初始化 TokenManager；环境变量或 `.env` 中的 `JWT_SECRET` 优先级高于 `config.yml` 的 `jwt.secret`。
 - `DB_PASSWORD` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
+- `REDIS_ENABLED=true` 时启动阶段必须完成 Redis Ping；运行中 Redis 读取失败会拒绝鉴权，不会静默放行。关闭 Redis 只适用于本地开发和单元测试。
 - `JWT_SECRET` 长度必须至少 32 个字符。生产环境推荐只通过运行时环境变量或 `.env` 注入，不要提交到 `config.yml`。
 
 `.env` 是可选的本地开发文件。容器和生产环境可以只通过运行时环境变量注入配置，不需要挂载 `.env`。
@@ -188,11 +199,11 @@ JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
 | --- | --- | --- | --- |
 | `GET` | `/ping` | 基础健康检查 | 否 |
 | `GET` | `/livez` | 进程存活检查 | 否 |
-| `GET` | `/readyz` | 服务就绪检查，包含 DB ping | 否 |
+| `GET` | `/readyz` | 服务就绪检查，包含 MySQL 和认证状态存储 Ping | 否 |
 | `POST` | `/api/v1/auth/register` | 用户注册 | 否 |
-| `POST` | `/api/v1/auth/login` | 返回 Access Token，并通过 HttpOnly Cookie 写入 Refresh Token | 否 |
+| `POST` | `/api/v1/auth/login` | 返回 Access Token，并通过 HttpOnly Cookie 写入 Refresh Token；限流时返回 429 和 `Retry-After` | 否 |
 | `POST` | `/api/v1/auth/refresh` | 使用 Refresh Cookie 轮换双 Token | 否 |
-| `POST` | `/api/v1/auth/logout` | 吊销 Refresh Token 并清除 Cookie | 否 |
+| `POST` | `/api/v1/auth/logout` | 吊销 Refresh Token；携带 Access Token 时同时按 JTI 立即吊销 | 否 |
 | `GET` | `/api/v1/users/me` | 当前用户信息，需要 `profile:read` | 是 |
 | `GET` | `/api/v1/users/me/authorization` | 当前用户角色码与权限码 | 是 |
 | `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称，需要 `profile:update` | 是 |
@@ -245,6 +256,7 @@ RBAC 初始化规则：
 | `migrations/00003_create_refresh_tokens.sql` | 创建 / 回滚 `refresh_tokens` 表 |
 | `migrations/00004_create_rbac_tables.sql` | 创建 / 回滚 RBAC 四表并写入默认角色权限 |
 | `migrations/00005_backfill_user_roles.sql` | 给既有用户补 `user` 角色，并给最早用户补 `admin` 角色 |
+| `migrations/00006_harden_auth_sessions.sql` | 增加 `auth_version`、Refresh Token `family_id` 与 `revoked_reason` |
 
 常用命令：
 
@@ -329,6 +341,7 @@ make ci
 
 - `JWT_SECRET` 使用 32 位以上强随机字符串。
 - `DB_PASSWORD` 不使用默认值。
+- Redis 必须启用、不可被公网访问，并为 `/data` 配置持久化存储。
 - 生产数据库不使用 MySQL `root` 账号连接业务库。
 - `make lint`、`make test`、`make race-test`、`make vet` 通过。
 - `make migrate-validate` 通过，并已在目标数据库执行 migration。

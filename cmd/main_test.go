@@ -7,6 +7,8 @@ import (
 	"errors"
 	"go-user-system/config"
 	"go-user-system/internal/auth"
+	"go-user-system/internal/authstate"
+	"go-user-system/internal/service"
 	"log/slog"
 	"net/http"
 	"os"
@@ -123,10 +125,13 @@ func baseRunDeps(t *testing.T) appDeps {
 		initDB: func(cfg *config.Config) (*gorm.DB, error) {
 			return openMainGormDB(t), nil
 		},
+		newAuthStateStore: func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error) {
+			return authstate.NewMemoryStore(), nil
+		},
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return &auth.TokenManager{}, nil
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler {
 			return http.NewServeMux()
 		},
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
@@ -146,7 +151,10 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.shutdownTimeout != 10*time.Second {
 		t.Fatalf("expected shutdown timeout 10s, got %s", deps.shutdownTimeout)
 	}
-	if deps.setupRouter(nil, nil, &auth.TokenManager{}) == nil {
+	if deps.newAuthStateStore == nil {
+		t.Fatal("expected authentication state store factory")
+	}
+	if deps.setupRouter(nil, nil, &auth.TokenManager{}, authstate.NewMemoryStore(), service.LoginRateLimit{}) == nil {
 		t.Fatal("expected default router")
 	}
 	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {
@@ -246,6 +254,20 @@ func TestRunReturnsDatabaseHandleError(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "get database handle failed") {
 		t.Fatalf("expected database handle error, got %v", err)
+	}
+}
+
+func TestRunReturnsAuthenticationStateStoreError(t *testing.T) {
+	expectedErr := errors.New("redis unavailable")
+	deps := baseRunDeps(t)
+	deps.newAuthStateStore = func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error) {
+		return nil, expectedErr
+	}
+
+	err := run(deps)
+
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected authentication state store error, got %v", err)
 	}
 }
 

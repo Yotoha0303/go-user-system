@@ -22,6 +22,14 @@ var healthSQLPingCount atomic.Int32
 
 type healthSQLDriver struct{}
 
+type fakeHealthChecker struct {
+	err error
+}
+
+func (c fakeHealthChecker) Ping(context.Context) error {
+	return c.err
+}
+
 func (healthSQLDriver) Open(name string) (driver.Conn, error) {
 	conn := &healthSQLConn{}
 	if name == "ping-fail" {
@@ -177,5 +185,22 @@ func TestReadyzHandlerReturnsReadyWhenDatabasePings(t *testing.T) {
 	}
 	if got := healthSQLPingCount.Load(); got != 1 {
 		t.Fatalf("expected database ping once, got %d", got)
+	}
+}
+
+func TestReadyzHandlerFailsWhenAuthenticationStorePingFails(t *testing.T) {
+	healthHandler := NewHealthHandler(
+		openHealthGormDB(t, "ready"),
+		fakeHealthChecker{err: errors.New("redis unavailable")},
+	)
+
+	recorder := performJSONRequest(healthHandler.ReadyzHandler, http.MethodGet, "/readyz", "")
+	body := decodeResponse(t, recorder)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, recorder.Code)
+	}
+	if body.Code != response.CodeReadinessFailed {
+		t.Fatalf("expected code %d, got %d", response.CodeReadinessFailed, body.Code)
 	}
 }

@@ -18,10 +18,23 @@ data:
       connMaxLifeTime: 30m
       connMaxIdleTime: 5m
       pingTimeout: 3s
+    redis:
+      enabled: true
+      address: go-user-system-redis:6379
+      db: 0
+      dialTimeout: 3s
+      readTimeout: 2s
+      writeTimeout: 2s
+      pingTimeout: 3s
     jwt:
       expireHours: 24
       accessTokenExpireMinutes: 15
       refreshTokenExpireHours: 168
+    auth:
+      loginRateLimit:
+        accountLimit: 5
+        ipLimit: 20
+        window: 15m
     http:
       server:
         readTimeout: 5s
@@ -36,3 +49,5 @@ data:
   DB_PORT: "3306"
   DB_USER: "root"
   DB_NAME: "go_user_system"
+  REDIS_ENABLED: "true"
+  REDIS_ADDR: "go-user-system-redis:6379"

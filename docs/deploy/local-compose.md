@@ -1,11 +1,11 @@
 # 本地 Docker Compose 部署说明
 
-本文档说明如何在本地使用 Docker Compose 启动 `go-user-system` 和 MySQL。
+本文档说明如何在本地使用 Docker Compose 启动 `go-user-system`、MySQL 和 Redis。
 
 ## 1. 前置条件
 
 - 已安装 Docker Desktop，或 Docker Engine + Docker Compose。
-- Docker 可以拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`。
+- Docker 可以拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`、`redis:7.4-alpine`。
 - 本地端口 `8082` 和 `3306` 未被占用。
 - 已复制 `.env.example` 为 `.env`。
 - 已复制 `.env.goose.example` 为 `.env.goose`。
@@ -68,8 +68,10 @@ make migrate-up
 
 - 构建 Go 应用镜像。
 - 启动 MySQL `8.4`。
+- 启动 Redis `7.4`，启用 AOF 并挂载 `redis_data` 数据卷。
 - 创建数据库 `go_user_system`。
 - 等待 MySQL healthcheck 通过。
+- 等待 Redis healthcheck 通过。
 - 启动应用容器。
 - 通过 `make migrate-up` 使用 goose 执行 `migrations/*.sql`。
 
@@ -82,6 +84,7 @@ docker compose ps
 期望状态：
 
 - `go-user-system-mysql` 为 `healthy`。
+- `go-user-system-redis` 为 `healthy`。
 - `go-user-system-app` 为 `running` 或 `healthy`。
 
 查看日志：
@@ -89,6 +92,7 @@ docker compose ps
 ```bash
 docker compose logs -f app
 docker compose logs -f mysql
+docker compose logs -f redis
 ```
 
 ## 5. 验证服务
@@ -99,7 +103,7 @@ curl http://127.0.0.1:8082/livez
 curl http://127.0.0.1:8082/readyz
 ```
 
-`/readyz` 返回 200 表示应用进程已启动，且数据库可连接。
+`/readyz` 返回 200 表示应用进程已启动，且 MySQL 与认证状态存储均可连接。
 
 完整接口验证可以使用：
 
@@ -125,6 +129,8 @@ DB_PORT=3306
 
 原因：Compose 会创建内部 DNS，`mysql` 是数据库服务名。
 
+应用容器通过 `redis:6379` 访问 Redis。Compose 会强制设置 `REDIS_ENABLED=true`，Redis 不可用时应用不会进入可用状态。
+
 ## 7. 执行 migration
 
 常用命令：
@@ -144,6 +150,7 @@ make migrate-down
 - `migrations/00003_create_refresh_tokens.sql`
 - `migrations/00004_create_rbac_tables.sql`
 - `migrations/00005_backfill_user_roles.sql`
+- `migrations/00006_harden_auth_sessions.sql`
 
 ## 8. 停止服务
 
@@ -153,7 +160,7 @@ make migrate-down
 docker compose down
 ```
 
-删除容器和 MySQL 数据卷：
+删除容器以及 MySQL、Redis 数据卷：
 
 ```bash
 docker compose down -v

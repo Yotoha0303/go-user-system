@@ -219,8 +219,10 @@ k8s-build-kind: k8s-build
 # which fails when Docker only has linux/amd64 blobs.
 kind-load-deps:
 	docker pull --platform linux/amd64 mysql:8.4
+	docker pull --platform linux/amd64 redis:7.4-alpine
 	docker pull --platform linux/amd64 nginx:alpine
 	docker save mysql:8.4 | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/mysql:8.4 -
+	docker save redis:7.4-alpine | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/redis:7.4-alpine -
 	docker save nginx:alpine | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/nginx:alpine -
 
 k8s-build-push: k8s-build
@@ -238,6 +240,9 @@ k8s-status:
 	@echo ""
 	@echo "=== MySQL ==="
 	kubectl get pods,svc,deployment,pvc -n $(K8S_NAMESPACE) -l app=$(K8S_DEPLOYMENT)-mysql 2>/dev/null || true
+	@echo ""
+	@echo "=== Redis ==="
+	kubectl get pods,svc,deployment,pvc -n $(K8S_NAMESPACE) -l app=$(K8S_DEPLOYMENT)-redis 2>/dev/null || true
 	@echo ""
 	@echo "=== Frontend ==="
 	kubectl get pods,svc,deployment -n $(K8S_NAMESPACE) -l app=$(K8S_DEPLOYMENT)-frontend 2>/dev/null || true
@@ -267,6 +272,7 @@ k8s-validate:
 k8s-wait:
 	kubectl wait --for=condition=available deployment/$(K8S_DEPLOYMENT) -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl wait --for=condition=ready pod -l app=$(K8S_DEPLOYMENT)-mysql -n $(K8S_NAMESPACE) --timeout=600s 2>/dev/null || true
+	kubectl wait --for=condition=ready pod -l app=$(K8S_DEPLOYMENT)-redis -n $(K8S_NAMESPACE) --timeout=600s
 
 k8s-port-forward:
 	kubectl port-forward -n $(K8S_NAMESPACE) svc/$(K8S_DEPLOYMENT) 8082:8082

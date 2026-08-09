@@ -785,6 +785,39 @@ func TestUpdateNicknameTrimsAndUpdatesNickname(t *testing.T) {
 	}
 }
 
+func TestUpdatePasswordChangesHashAndRevokesRefreshTokensInTransaction(t *testing.T) {
+	oldHash := passwordHash(t, "old-password")
+	store := &fakeUserStore{userByID: &model.User{
+		ID:           7,
+		PasswordHash: oldHash,
+		Status:       model.UserStatusActive,
+		AuthVersion:  1,
+	}}
+	repo := &fakeRefreshTokenRepo{current: &model.RefreshToken{UserID: 7}}
+	userService := &UserService{
+		db:          openServiceDryRunDB(t),
+		store:       store,
+		refreshRepo: repo,
+	}
+
+	err := userService.UpdateUserPassword(context.Background(), 7, request.UpdatePasswordRequest{
+		OldPassword: "old-password",
+		NewPassword: "new-password",
+	})
+	if err != nil {
+		t.Fatalf("update password failed: %v", err)
+	}
+	if store.oldPasswordHash != oldHash {
+		t.Fatal("expected password update to be guarded by old hash")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(store.newPasswordHash), []byte("new-password")); err != nil {
+		t.Fatalf("expected new password hash, got %v", err)
+	}
+	if repo.current.RevokedAt == nil || repo.current.RevokedReason == nil || *repo.current.RevokedReason != model.RefreshTokenRevokedReasonPasswordChange {
+		t.Fatalf("expected refresh tokens revoked for password change, got %+v", repo.current)
+	}
+}
+
 func prepareUserServiceIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

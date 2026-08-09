@@ -237,12 +237,18 @@ func (s *UserService) UpdateNickname(ctx context.Context, userID int64, nickname
 }
 
 func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req request.UpdatePasswordRequest) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+	if err := s.ensureDB(); err != nil {
+		return err
+	}
+	if req.OldPassword == req.NewPassword {
+		return ErrUserPasswordNoDifference
+	}
 
-		if req.OldPassword == req.NewPassword {
-			return ErrUserPasswordNoDifference
-		}
-		user, err := s.store.GetUserByID(ctx, tx, userID)
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		user, err := s.store.GetUserByIDForUpdate(ctx, tx, userID)
 		if err != nil {
 			return ErrUserNotFound
 		}
@@ -269,7 +275,7 @@ func (s *UserService) UpdateUserPassword(ctx context.Context, userID int64, req 
 		}
 
 		if s.refreshRepo != nil {
-			if err := s.refreshRepo.RevokeAllByUserID(ctx, tx, userID, time.Now()); err != nil {
+			if err := s.refreshRepo.RevokeAllByUserID(ctx, tx, userID, time.Now(), model.RefreshTokenRevokedReasonPasswordChange); err != nil {
 				return apperror.Wrap(
 					http.StatusInternalServerError,
 					response.CodeUpdateUserPasswordFailed,

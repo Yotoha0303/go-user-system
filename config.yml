@@ -10,10 +10,23 @@ mysql:
   connMaxLifeTime: 30m
   connMaxIdleTime: 5m
   pingTimeout: 3s
+redis:
+  enabled: false
+  address: 127.0.0.1:6379
+  db: 0
+  dialTimeout: 3s
+  readTimeout: 2s
+  writeTimeout: 2s
+  pingTimeout: 3s
 jwt:
   expireHours: 24
   accessTokenExpireMinutes: 15
   refreshTokenExpireHours: 168
+auth:
+  loginRateLimit:
+    accountLimit: 5
+    ipLimit: 20
+    window: 15m
 http:
   server:
     readTimeout: 5s
