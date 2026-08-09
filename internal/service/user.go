@@ -88,20 +88,10 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 	}
 
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		userCount, err := s.store.CountUsers(ctx, tx)
-		if err != nil {
-			return err
-		}
 		if err := s.store.CreateUser(ctx, tx, &user); err != nil {
 			return err
 		}
-		if err := s.rbacRepo.AssignRoleToUserByCode(ctx, tx, user.ID, model.RoleCodeUser); err != nil {
-			return err
-		}
-		if userCount == 0 {
-			return s.rbacRepo.AssignRoleToUserByCode(ctx, tx, user.ID, model.RoleCodeAdmin)
-		}
-		return nil
+		return s.rbacRepo.AssignRoleToUserByCode(ctx, tx, user.ID, model.RoleCodeUser)
 	}); err != nil {
 		return apperror.Wrap(
 			http.StatusInternalServerError,

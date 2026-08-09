@@ -1,149 +1,136 @@
-# go-user-system
+# Go User System
 
-基于 Go + Gin + GORM + MySQL + Redis 的用户认证系统。项目重点不是堆功能，而是把一个后端服务做成可运行、可测试、可部署、可复盘的工程化样板。
+[![CI](https://github.com/Yotoha0303/go-user-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Yotoha0303/go-user-system/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Yotoha0303/go-user-system/actions/workflows/codeql.yml/badge.svg)](https://github.com/Yotoha0303/go-user-system/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 当前状态
+一个可自托管的全栈用户认证与 RBAC 项目。后端使用 Go、Gin、GORM、MySQL 和 Redis，前端使用 React、TypeScript 和 Vite。项目提供可重复的数据库迁移、完整容器栈、Kubernetes 清单、自动化测试和发布流水线。
 
-- 已实现用户注册、登录、双 Token 刷新、登出、当前用户查询、昵称修改、密码修改。
-- Access/Refresh Token 携带用户 `auth_version`；改密会在同一事务中递增版本并吊销全部 Refresh Token，禁用用户和旧版本 Token 会在鉴权时被拒绝。
-- 使用 **JWT Access/Refresh 双 Token** 做接口鉴权，**Refresh Token 只存哈希并支持 Rotation、Token Family 重放检测和 Family 级吊销**。
-- Redis 保存按 JTI 标识的 Access Token 吊销状态，并实现账号/IP 双维度登录失败限流；生产配置下 Redis 故障采用 fail-closed。
-- 基于 RBAC 五表模型实现角色、权限、用户角色、角色权限，并通过 Gin 中间件做接口级鉴权。
-- 使用统一响应结构、业务错误码和 `internal/apperror` 应用错误模型。
-- 使用 `swaggo/swag` 注解生成 Swagger JSON、YAML 文档，并通过 `gin-swagger` 提供 `/swagger/index.html` 文档入口。
-- 使用 Goose 管理 SQL migration，不使用 GORM `AutoMigrate`。
-- 已接入 `Request ID`、结构化 access log、panic recovery 日志。
-- 已配置 HTTP server 超时、请求 context timeout、数据库连接池，以及 MySQL/Redis 启动 Ping timeout。
-- GitHub Actions CI 覆盖 golangci-lint、单元测试、race 测试、go vet、migration 校验、二进制构建和 Docker 镜像构建；本地 `make ci` 覆盖 lint、test、race-test、vet、build 和 docker-build。
+当前公开交付版本为 `v1.0.0-rc.1`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
+
+![Go User System sign-in screen](docs/assets/application-home.png)
+
+## 功能
+
+- 用户注册、登录、资料查询、昵称修改、密码修改和登出。
+- JWT Access/Refresh 双 Token；Refresh Token 使用 HttpOnly Cookie、哈希存储和 Rotation。
+- Token Family 重放检测、用户 `auth_version`、改密后全会话失效。
+- Redis JTI 吊销和账号/IP 双维度登录失败限流，多副本环境下 fail-closed。
+- RBAC 角色、权限、用户角色和角色权限模型，以及接口级权限中间件。
+- 显式一次性管理员初始化，普通注册不再获得管理员权限。
+- 可关闭的公开注册入口：`REGISTRATION_ENABLED=false`。
+- React 管理界面、内存 Access Token、Cookie 会话恢复和权限路由。
+- Swagger、健康检查、结构化日志、Request ID、超时和优雅关闭。
+- Compose 全栈、Kubernetes、CI、CodeQL、Dependabot 和 GHCR 发布。
+
+## 快速开始
+
+需要 Docker Engine 或 Docker Desktop，并启用 Docker Compose。
+
+1. 创建本地环境文件：
+
+```bash
+cp .env.example .env
+```
+
+PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. 至少替换以下值：
+
+```dotenv
+DB_ROOT_PASSWORD=replace_with_a_strong_root_password
+DB_PASSWORD=replace_with_a_different_app_password
+JWT_SECRET=replace_with_a_32_plus_chars_random_secret
+REGISTRATION_ENABLED=true
+```
+
+3. 构建并启动完整应用：
+
+```bash
+docker compose up -d --build --wait
+```
+
+Compose 会依次启动 MySQL、执行 Goose migration、启动 Redis、后端和前端。无需再手工运行 migration。
+
+4. 创建第一个管理员：
+
+```bash
+export BOOTSTRAP_ADMIN_USERNAME=admin
+export BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password'
+docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD app bootstrap-admin
+```
+
+PowerShell：
+
+```powershell
+$env:BOOTSTRAP_ADMIN_USERNAME="admin"
+$env:BOOTSTRAP_ADMIN_PASSWORD="replace-with-a-strong-password"
+docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD app bootstrap-admin
+```
+
+管理员只允许初始化一次。普通注册用户始终只绑定 `user` 角色。
+
+5. 访问服务：
+
+| 地址 | 用途 |
+| --- | --- |
+| `http://localhost:8080` | Web 应用 |
+| `http://localhost:8082/swagger/index.html` | Swagger |
+| `http://localhost:8082/readyz` | MySQL 与 Redis 就绪检查 |
+
+完整 Compose 说明见 `docs/deploy/local-compose.md`。
 
 ## 技术栈
 
-| 类型 | 技术 |
+| 区域 | 技术 |
 | --- | --- |
-| Web 框架 | Gin |
-| ORM | GORM |
-| 数据库 | MySQL |
-| 认证状态 | Redis 7（本地测试可使用线程安全内存实现） |
-| Migration | goose |
-| 认证 | JWT Access/Refresh Token + bcrypt |
-| 权限 | RBAC 五表模型 |
-| 接口文档 | swaggo / gin-swagger |
-| 配置 | `config.yml` + `.env` + 环境变量覆盖 |
-| 日志 | `log/slog` JSON 结构化日志 |
-| 测试 | Go testing、httptest、fake SQL driver、miniredis、MySQL integration test |
-| 质量门禁 | golangci-lint v2、go test、go test -race、go vet |
-| 部署 | Docker、Docker Compose、Kubernetes、GitHub Actions |
+| 后端 | Go 1.25.12、Gin、GORM、bcrypt、JWT |
+| 数据 | MySQL 8.4、Redis 7.4、Goose migration |
+| 前端 | React 18、TypeScript 5、Vite 8、Redux Toolkit、Tailwind CSS |
+| 测试 | Go testing、httptest、miniredis、MySQL integration、Vitest、Testing Library、Playwright |
+| 交付 | Docker、Compose、Kubernetes、GitHub Actions、GHCR |
+| 安全 | govulncheck、npm audit、CodeQL、Dependabot、secret scanning |
 
 ## 项目结构
 
 ```text
-cmd/                    程序入口和启动流程
-config/                 配置加载、默认值、环境变量覆盖和校验
-internal/
-  apperror/             应用错误模型
-  auth/                 JWT 签发和解析
-  authstate/            Access 吊销与登录限流的 Redis/内存实现
-  dao/                  数据访问层
-  handler/              HTTP handler 和错误响应映射
-  middleware/           Request ID、Access Log、Recovery、Timeout、Auth
-  model/                GORM 模型
-  repository/           Refresh Token、RBAC Repository
-  request/              请求 DTO
-  response/             统一响应结构和业务错误码
-  service/              业务逻辑
-  testutil/             MySQL 集成测试工具
-pkg/
-  database/             MySQL / GORM 初始化
-  redisclient/          Redis 客户端初始化和启动健康检查
-router/                 路由注册
-migrations/             goose SQL migration
-docs/
-  deploy/               本地 Compose 与生产部署检查文档
-  http/                 REST Client 手动测试文件
-  sql/                  本地 SQL 辅助脚本
-  docs.go               swaggo 生成文件
-  swagger.json          Swagger JSON 文档
-  swagger.yaml          Swagger YAML 文档
-  backend-callgraph.gv  go-callvis DOT 调用图
-  backend-callgraph.svg go-callvis SVG 调用图
+cmd/                    后端入口与 bootstrap-admin 命令
+config/                 配置加载、环境变量覆盖和校验
+internal/               handler、service、repository、DAO、middleware、模型
+pkg/                    MySQL 和 Redis 客户端
+router/                 API、健康检查和 Swagger 路由
+migrations/             Goose SQL migration
+frontend/               React 应用、单元测试、Playwright 和 Nginx 镜像
+k8s/                    Kubernetes 工作负载、迁移 Job、服务和 Ingress
+docs/                   API、部署、迭代计划和操作记录
+.github/                 CI、CodeQL、发布、模板和依赖更新配置
 ```
 
-## 快速启动
+## 配置
 
-### Docker Compose
+非敏感默认值放在 `config.yml`，密码和密钥必须使用 `.env`、Shell 环境变量或部署平台 Secret 注入。
 
-首次启动前复制配置：
+| 变量 | 说明 | Compose 默认 |
+| --- | --- | --- |
+| `DB_ROOT_PASSWORD` | 仅用于初始化 MySQL root | 必填 |
+| `DB_PASSWORD` | 应用数据库账号密码 | 必填 |
+| `JWT_SECRET` | HS256 密钥，至少 32 字符 | 必填 |
+| `REGISTRATION_ENABLED` | 是否注册 `POST /api/v1/auth/register` | `true` |
+| `REDIS_ENABLED` | 是否启用共享认证状态 | Compose 强制为 `true` |
+| `REDIS_ADDR` | Redis 地址 | Compose 使用 `redis:6379` |
+| `BOOTSTRAP_ADMIN_USERNAME` | 一次性管理员用户名 | 命令执行时必填 |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 一次性管理员密码 | 命令执行时必填 |
+| `FRONTEND_PORT` / `BACKEND_PORT` | Compose 宿主机端口 | `8080` / `8082` |
 
-```bash
-cp .env.example .env
-cp .env.goose.example .env.goose
-```
+所有支持的数据库、JWT、Redis 和 HTTP 参数见 `.env.example`、`config.yml` 与 `config/config.go`。
 
-Windows PowerShell：
+## 本地开发
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item .env.goose.example .env.goose
-```
-
-修改 `.env`：
-
-```dotenv
-DB_PASSWORD=your_mysql_password
-JWT_SECRET=replace_with_a_32_plus_chars_random_secret
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
-JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
-REDIS_ENABLED=false
-REDIS_ADDR=127.0.0.1:6379
-# REDIS_PASSWORD=
-REDIS_DB=0
-```
-
-修改 `.env.goose`，确保数据库密码与 `.env` 一致：
-
-```dotenv
-GOOSE_DRIVER=mysql
-GOOSE_DBSTRING=root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system?parseTime=true&multiStatements=true
-GOOSE_MIGRATION_DIR=./migrations
-```
-
-启动服务，然后手动执行 migration。应用启动流程不会自动执行 migration，必须显式运行 `make migrate-up`：
-
-```bash
-docker compose up -d --build
-make migrate-up
-docker compose ps
-```
-
-验证：
-
-```bash
-curl http://127.0.0.1:8082/ping
-curl http://127.0.0.1:8082/livez
-curl http://127.0.0.1:8082/readyz
-```
-
-更多说明见 `docs/deploy/local-compose.md`。
-
-### 本地 Go 启动
-
-前置条件：
-
-- 安装 Go。
-- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@v3.27.3`。
-- 启动 MySQL；启用 `REDIS_ENABLED=true` 时还需启动 Redis。
-- 创建数据库 `go_user_system`。
-- 复制并配置 `.env` 和 `.env.goose`。
-
-创建数据库：
-
-```sql
-CREATE DATABASE go_user_system
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
-```
-
-启动：
+后端：
 
 ```bash
 go mod download
@@ -151,234 +138,79 @@ make migrate-up
 go run ./cmd
 ```
 
-注意：`cmd/main.go` 只负责加载配置、初始化数据库连接、初始化 JWT 和启动 HTTP server，不会自动执行 migration。
-
-## 配置说明
-
-| 来源 | 作用 | 是否提交 |
-| --- | --- | --- |
-| `config.yml` | 非敏感默认配置；不建议保存密钥 | 是 |
-| `.env.example` | 本地和 Compose 环境变量模板 | 是 |
-| `.env` | 本地真实环境变量 | 否 |
-| `.env.goose.example` | goose 本地迁移模板 | 是 |
-| `.env.goose` | goose 本地真实迁移配置 | 否 |
-| shell 环境变量 | CI、容器、服务器运行时注入 | 否 |
-
-关键环境变量：
-
-```dotenv
-APP_PORT=8082
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_mysql_password
-DB_NAME=go_user_system
-JWT_SECRET=replace_with_a_32_plus_chars_random_secret
-JWT_EXPIRE_HOURS=24
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
-JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
-REDIS_ENABLED=false
-REDIS_ADDR=127.0.0.1:6379
-# REDIS_PASSWORD=
-REDIS_DB=0
-```
-
-配置加载规则：
-
-- 启动时加载 `.env`，再加载 `config.yml`。
-- `APP_PORT`、数据库变量、JWT 变量以及 `REDIS_ENABLED`、`REDIS_ADDR`、`REDIS_PASSWORD`、`REDIS_DB` 可覆盖 `config.yml`。
-- `APP_PORT`、`JWT_EXPIRE_HOURS`、`JWT_ACCESS_TOKEN_EXPIRE_MINUTES` 和 `JWT_REFRESH_TOKEN_EXPIRE_HOURS` 如果存在但格式错误，启动会失败。
-- `JWT_SECRET` 会被加载进 `cfg.JWT.Secret` 后再初始化 TokenManager；环境变量或 `.env` 中的 `JWT_SECRET` 优先级高于 `config.yml` 的 `jwt.secret`。
-- `DB_PASSWORD` 不在 `config.yml` 中保存，必须通过环境变量或 `.env` 注入。
-- `REDIS_ENABLED=true` 时启动阶段必须完成 Redis Ping；运行中 Redis 读取失败会拒绝鉴权，不会静默放行。关闭 Redis 只适用于本地开发和单元测试。
-- `JWT_SECRET` 长度必须至少 32 个字符。生产环境推荐只通过运行时环境变量或 `.env` 注入，不要提交到 `config.yml`。
-
-`.env` 是可选的本地开发文件。容器和生产环境可以只通过运行时环境变量注入配置，不需要挂载 `.env`。
-
-## API 概览
-
-| 方法 | 路径 | 说明 | 鉴权 |
-| --- | --- | --- | --- |
-| `GET` | `/ping` | 基础健康检查 | 否 |
-| `GET` | `/livez` | 进程存活检查 | 否 |
-| `GET` | `/readyz` | 服务就绪检查，包含 MySQL 和认证状态存储 Ping | 否 |
-| `POST` | `/api/v1/auth/register` | 用户注册 | 否 |
-| `POST` | `/api/v1/auth/login` | 返回 Access Token，并通过 HttpOnly Cookie 写入 Refresh Token；限流时返回 429 和 `Retry-After` | 否 |
-| `POST` | `/api/v1/auth/refresh` | 使用 Refresh Cookie 轮换双 Token | 否 |
-| `POST` | `/api/v1/auth/logout` | 吊销 Refresh Token；携带 Access Token 时同时按 JTI 立即吊销 | 否 |
-| `GET` | `/api/v1/users/me` | 当前用户信息，需要 `profile:read` | 是 |
-| `GET` | `/api/v1/users/me/authorization` | 当前用户角色码与权限码 | 是 |
-| `PUT` | `/api/v1/users/me/profile` | 修改当前用户昵称，需要 `profile:update` | 是 |
-| `PATCH` | `/api/v1/users/me/update/password` | 修改当前用户密码，需要 `password:update` | 是 |
-| `GET` | `/api/v1/admin/roles` | 查询角色列表，需要 `admin:roles:read` | 是 |
-| `GET` | `/api/v1/admin/permissions` | 查询权限列表，需要 `admin:permissions:read` | 是 |
-| `PUT` | `/api/v1/admin/users/:id/roles` | 给用户分配角色，需要 `admin:user_roles:update` | 是 |
-
-Swagger 文档：
-
-- 页面入口：`/swagger/index.html`
-- JSON：`/swagger/doc.json`
-- YAML：`/swagger/swagger.yaml`
-- 重新生成：`make swagger`
-
-手动测试文件：`docs/http/test.http`。
-
-后端调用图：
-
-- SVG：`docs/backend-callgraph.svg`
-- DOT 源文件：`docs/backend-callgraph.gv`
-- 重新生成：`make callvis`
-- 交互查看：运行 `make callvis-serve`，访问 `http://127.0.0.1:7878/`。
-- 分析方式：RTA，按 package/type 分组，仅保留 `go-user-system` 模块内调用。
-
-`make callvis` 固定使用 `go-callvis v0.7.1`，首次执行会下载工具并在 `.cache/go-callvis` 建立独立 Go 构建缓存。当前模块路径不含域名，不能给命令增加 `-nostd`，否则该版本会把项目包误判为标准库并生成空图。
-
-RBAC 初始化规则：
-
-- 第一个注册用户会自动绑定 `admin` 和 `user` 角色，用于系统初始化。
-- 后续注册用户默认绑定 `user` 角色。
-- 管理员可通过 `/api/v1/admin/users/:id/roles` 调整用户角色。
-
-浏览器端认证约定：
-
-- Access Token 只保存在前端内存状态中，通过 `Authorization: Bearer <token>` 发送。
-- Refresh Token 仅存储在 `HttpOnly`、`SameSite=Lax` Cookie 中，不出现在登录和刷新响应体。
-- `/api/v1/auth/refresh` 和 `/api/v1/auth/logout` 仍允许可选 JSON 请求体，便于非浏览器客户端调用。
-
-## 数据库迁移
-
-项目使用 goose 管理 `migrations/*.sql`。当前 migration：
-
-应用启动不会自动执行 migration。部署或本地启动前需要通过 `make migrate-up` 或等价 goose 命令显式执行。
-
-| 文件 | 作用 |
-| --- | --- |
-| `migrations/00001_create_users.sql` | 创建 / 回滚 `users` 表 |
-| `migrations/00002_add_user_audit_fields.sql` | 增加 / 回滚 `last_login_at`、`deleted_at` |
-| `migrations/00003_create_refresh_tokens.sql` | 创建 / 回滚 `refresh_tokens` 表 |
-| `migrations/00004_create_rbac_tables.sql` | 创建 / 回滚 RBAC 四表并写入默认角色权限 |
-| `migrations/00005_backfill_user_roles.sql` | 给既有用户补 `user` 角色，并给最早用户补 `admin` 角色 |
-| `migrations/00006_harden_auth_sessions.sql` | 增加 `auth_version`、Refresh Token `family_id` 与 `revoked_reason` |
-
-常用命令：
+前端：
 
 ```bash
-make migrate-validate
-make migrate-status
-make migrate-version
-make migrate-up
-make migrate-down
+cd frontend
+npm ci
+npm run dev
 ```
 
-新增 migration：
+前端开发服务器监听 `http://127.0.0.1:8888`，并把 `/api` 代理到 `http://localhost:8082`。本地 Goose 配置模板为 `.env.goose.example`。
 
-```bash
-make migrate-create name=your_change
-```
-
-然后在生成的 SQL 文件里补充 `-- +goose Up` 和 `-- +goose Down`。
-
-## 测试与质量门禁
-
-本地常用命令：
+## 测试与门禁
 
 ```bash
 make lint
 make test
 make race-test
 make vet
-make coverage
-make build
+make security
+make frontend-check
+make migrate-validate
 ```
 
-`make lint` 使用 `.golangci.yml`，该文件是 golangci-lint v2 配置。本地需要安装 v2，例如：
+MySQL 集成测试要求 `TEST_DATABASE_DSN` 指向数据库名包含 `test` 的专用库；测试工具会拒绝操作其他数据库。
+
+完整浏览器测试需要先启动 Compose 栈并保持注册开启：
 
 ```bash
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+npx playwright install chromium --with-deps
+npm --prefix frontend run test:e2e
 ```
 
-集成测试需要专用 MySQL 测试库，数据库名必须包含 `test`，避免误删开发库或生产库：
+GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并在完整栈上执行 Playwright 流程。
 
-```sql
-CREATE DATABASE go_user_system_test
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
-```
+## API 概览
 
-PowerShell 示例：
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/ping`、`/livez`、`/readyz` | 健康检查 |
+| `POST` | `/api/v1/auth/register` | 注册，可通过配置关闭 |
+| `POST` | `/api/v1/auth/login` | 登录并创建双 Token 会话 |
+| `POST` | `/api/v1/auth/refresh` | 轮换 Refresh Token |
+| `POST` | `/api/v1/auth/logout` | 吊销当前会话 |
+| `GET` | `/api/v1/users/me` | 当前用户资料 |
+| `GET` | `/api/v1/users/me/authorization` | 当前角色和权限 |
+| `PUT` | `/api/v1/users/me/profile` | 修改昵称 |
+| `PATCH` | `/api/v1/users/me/update/password` | 修改密码并使旧会话失效 |
+| `GET` | `/api/v1/admin/roles` | 查询角色 |
+| `GET` | `/api/v1/admin/permissions` | 查询权限 |
+| `PUT` | `/api/v1/admin/users/:id/roles` | 分配用户角色 |
 
-```powershell
-$env:TEST_DATABASE_DSN="root:your_mysql_password@tcp(127.0.0.1:3306)/go_user_system_test?charset=utf8mb4&parseTime=True&loc=Local"
-go test ./internal/dao ./internal/service -run Integration -v
-```
+完整契约见 Swagger 和 `docs/http/test.http`。
 
-## CI 流程
+## 部署与发布
 
-CI 文件：`.github/workflows/ci.yml`
+- Compose：`docs/deploy/local-compose.md`
+- Kubernetes：`docs/deploy/kubernetes.md`
+- 生产检查：`docs/deploy/production-checklist.md`
+- 发布：推送 `v*` 标签后，Actions 构建多架构 GHCR 镜像、二进制、前端归档和 SHA-256 校验文件。
+- 回滚：使用上一个固定版本镜像；数据库回滚前先确认 migration 的数据兼容性和备份。
 
-当前流程：
+## 项目文档
 
-1. `go mod download`
-2. `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`
-3. `golangci-lint run ./...`
-4. `go test ./...`
-5. `go test -race ./...`
-6. `go vet ./...`
-7. `go install github.com/pressly/goose/v3/cmd/goose@v3.27.3`
-8. `goose -dir migrations validate`
-9. `go build -o bin/go-user-system ./cmd`
-10. `docker build -t go-user-system:ci .`
+- `docs/operation-record-public-delivery.md`：本次公开交付节点、范围和验收记录。
+- `docs/iteration-plan-public-delivery.md`：候选版本交付计划。
+- `docs/iteration-plan-production-auth-hardening.md`：生产认证加固设计。
+- `docs/operation-record-production-auth-hardening.md`：认证加固操作记录。
+- `ROADMAP.md`：稳定版和后续能力规划。
+- `CHANGELOG.md`：版本变更。
 
-本地等价检查：
+## 贡献与安全
 
-```bash
-make ci
-```
+提交改动前阅读 `CONTRIBUTING.md` 和 `CODE_OF_CONDUCT.md`。安全问题不要创建公开 Issue，请按 `SECURITY.md` 使用 GitHub 私有漏洞报告。
 
-`make ci` 当前执行 `make lint`、`make test`、`make race-test`、`make vet`、`make build` 和 `make docker-build`。GitHub Actions 额外执行 `goose -dir migrations validate`。
+## License
 
-## 生产部署检查
-
-生产部署前至少确认：
-
-- `JWT_SECRET` 使用 32 位以上强随机字符串。
-- `DB_PASSWORD` 不使用默认值。
-- Redis 必须启用、不可被公网访问，并为 `/data` 配置持久化存储。
-- 生产数据库不使用 MySQL `root` 账号连接业务库。
-- `make lint`、`make test`、`make race-test`、`make vet` 通过。
-- `make migrate-validate` 通过，并已在目标数据库执行 migration。
-- `/readyz` 返回 200。
-- 应用日志没有打印密码、JWT secret、access token、password hash。
-- 容器以非 root 用户运行。
-- SIGTERM 能触发优雅关闭。
-
-完整清单见 `docs/deploy/production-checklist.md`。
-
-## 常见问题
-
-### JWT 初始化失败
-
-检查：
-
-```dotenv
-JWT_SECRET=replace_with_a_32_plus_chars_random_secret
-JWT_EXPIRE_HOURS=24
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
-JWT_REFRESH_TOKEN_EXPIRE_HOURS=168
-```
-
-`JWT_SECRET` 不能为空，长度不能少于 32 个字符。可以放在 `.env`、shell 环境变量或 `config.yml` 的 `jwt.secret` 中；如果同时存在，环境变量优先。Access Token 和 Refresh Token 的过期配置必须是正整数。
-
-### Compose 中应用连接不上数据库
-
-容器内部使用 `DB_HOST=mysql`，本机直连使用 `DB_HOST=127.0.0.1`。优先检查：
-
-```bash
-docker compose ps
-docker compose logs mysql
-docker compose logs app
-```
-
-### `golangci-lint` 报配置版本不匹配
-
-`.golangci.yml` 是 v2 配置。如果本地是 v1，会看到类似“configuration file for golangci-lint v2 with golangci-lint v1”的错误。安装 v2 后再运行 `make lint`。
+[MIT](LICENSE)

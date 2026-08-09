@@ -1,79 +1,64 @@
-# 生产部署前检查清单
+# 生产部署检查清单
 
-这份清单用于避免把本地开发配置直接带到生产环境，并确保服务具备基本的可运行、可观测、可回滚能力。
+`v1.0.0-rc.1` 进入生产前应逐项验证；无法满足的项目需要记录风险、负责人和补救期限。
 
-## 1. 配置与密钥
+## 密钥与权限
 
-- [ ] `JWT_SECRET` 已替换为 32 位以上强随机字符串。
-- [ ] `DB_PASSWORD` 已替换为生产数据库密码。
-- [ ] 生产环境不使用 MySQL `root` 用户连接业务库。
-- [ ] `.env`、`.env.*`、`config.local.yml` 未提交到 Git。
-- [ ] `APP_PORT`、`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_NAME`、`JWT_EXPIRE_HOURS` 与部署环境一致。
-- [ ] `APP_PORT` 和 `JWT_EXPIRE_HOURS` 是合法数字，避免启动时配置解析失败。
-- [ ] 日志中不会打印密码、JWT secret、access token、password hash。
-- [ ] `REDIS_ENABLED=true`，`REDIS_ADDR`、`REDIS_DB` 与部署环境一致，Redis 密码通过 `REDIS_PASSWORD` 注入（如启用认证）。
+- [ ] `DB_ROOT_PASSWORD`、`DB_PASSWORD`、`JWT_SECRET` 均为独立强随机值。
+- [ ] 应用使用最小权限数据库账号，不使用 MySQL root。
+- [ ] `.env`、`k8s/secret.yaml`、管理员密码、Token 和用户数据未提交。
+- [ ] GitHub secret scanning、push protection、Dependabot security updates 已启用。
+- [ ] 已通过私有渠道处理历史泄漏，并轮换可能受影响的凭据。
+- [ ] 管理员由 `bootstrap-admin` 创建，系统已有管理员后该命令会被拒绝。
+- [ ] `REGISTRATION_ENABLED` 符合业务策略；不需要公开注册时设为 `false`。
 
-## 2. 构建与质量门禁
+## 构建与供应链
 
-- [ ] 本地 `make lint` 通过。
-- [ ] 本地 `make test` 通过。
-- [ ] 本地 `make race-test` 通过。
-- [ ] 本地 `make vet` 通过。
-- [ ] 本地 `make build` 通过。
-- [ ] `make migrate-validate` 通过。
-- [ ] GitHub Actions CI 通过。
-- [ ] 本地 golangci-lint 使用 v2，和 `.golangci.yml` 配置版本一致。
+- [ ] CI 的 backend、frontend、manifests 和 e2e 作业全部通过。
+- [ ] CodeQL 分析通过。
+- [ ] `govulncheck ./...` 无可达漏洞。
+- [ ] `npm audit --audit-level=high` 无阻断项。
+- [ ] 部署固定版本或 digest，不使用 `latest`。
+- [ ] GHCR 镜像包含 provenance 和 SBOM，发布归档校验和已核对。
 
-## 3. 数据库
+## 数据与迁移
 
-- [ ] 目标数据库已创建。
-- [ ] 数据库字符集使用 `utf8mb4`。
-- [ ] 数据库账号只授予应用需要的最小权限。
-- [ ] 已执行 `migrations/*.sql`。
-- [ ] `goose_db_version` 表中可以看到已执行的 migration 版本。
-- [ ] 数据库连接池参数已确认：`maxOpenConns`、`maxIdleConns`、`connMaxLifeTime`、`connMaxIdleTime`。
-- [ ] 数据库变更具备 down migration 或备份恢复方案。
-- [ ] 已确认数据库备份和恢复流程。
+- [ ] 迁移由单一 Compose 服务或 Kubernetes Job 执行，不由每个应用副本并发执行。
+- [ ] `goose validate` 通过，目标库 migration 版本已确认。
+- [ ] 数据库和 Redis 持久卷容量、备份、恢复和保留策略已配置。
+- [ ] 已在非生产环境执行一次备份恢复演练。
+- [ ] 破坏性 schema 回滚前已评估数据兼容性。
 
-## 4. 容器与运行时
+## 网络与运行时
 
-- [ ] 镜像使用非 root 用户运行应用。
-- [ ] 容器包含 `/readyz` healthcheck。
-- [ ] 部署平台会向容器发送 `SIGTERM` 进行停止。
-- [ ] 服务收到 `SIGTERM` 后能优雅关闭 HTTP server 并释放数据库连接。
-- [ ] 已配置合理的重启策略。
-- [ ] 已确认 `config.yml` 随镜像复制，敏感信息通过环境变量注入。
-- [ ] Redis 不暴露公网端口，启用持久化并为数据目录配置持久卷。
-- [ ] Redis 重启后 Access JTI 吊销与登录限流状态能够恢复。
+- [ ] 外部入口启用 TLS，代理传递正确的 `X-Forwarded-Proto`。
+- [ ] MySQL 和 Redis 不暴露公网。
+- [ ] 容器使用非 root 用户、禁用提权并移除不需要的 capabilities。
+- [ ] CPU、内存、重启策略和副本数符合目标负载。
+- [ ] SIGTERM 优雅关闭已验证。
+- [ ] Ingress 保留 `/api/v1/...` 原始路径，前端 SPA fallback 正常。
 
-## 5. 超时与稳定性
+## 认证行为
 
-- [ ] HTTP server 已配置 `readTimeout`、`writeTimeout`、`idleTimeout`、`readHeaderTimeout`。
-- [ ] 请求级 `timeout` 已配置为合理值。
-- [ ] 数据库启动 ping 使用 `pingTimeout`。
-- [ ] Redis 启动 ping、读写超时已配置；故障时鉴权采用 fail-closed。
-- [ ] 已理解当前请求 timeout 是 context deadline，不会自动中断不检查 context 的 handler，也不会自动返回 504。
-- [ ] handler -> service -> dao 链路持续传递 `context.Context`。
+- [ ] Refresh Cookie 在 HTTPS 下带 `Secure`、`HttpOnly` 和 `SameSite=Lax`。
+- [ ] Redis 不可用时受保护请求拒绝访问并触发告警。
+- [ ] 登出后当前 Access/Refresh 失效。
+- [ ] 改密后全部旧 Access/Refresh 失效。
+- [ ] Refresh 重放会吊销整个 Token Family。
+- [ ] 登录限流返回 429 和正确的 `Retry-After`。
+- [ ] 普通注册用户只有 `user` 角色，无法访问管理员接口。
 
-## 6. 日志与可观测性
+## 可观测与验收
 
-- [ ] Access log 是结构化日志，包含 `request_id`、`method`、`path`、`router`、`status`、`latency`、`client_ip`、`body_size`。
-- [ ] Panic recovery 会记录 `request_id`、`method`、`path`、`panic`、`stack`。
-- [ ] 业务错误日志包含 `request_id`、`path`、`method`、业务错误码和 cause。
-- [ ] 日志采集系统能按 `request_id` 检索一次请求的相关日志。
+- [ ] `/livez` 和 `/readyz` 纳入平台探针与告警。
+- [ ] 日志采集支持按 `request_id` 检索，且不记录密码、密钥、Token 或密码哈希。
+- [ ] 浏览器注册、登录、资料、登出流程通过。
+- [ ] 管理员角色查询、权限查询和角色分配通过。
+- [ ] 关键失败场景和恢复步骤已记录在运行手册。
 
-## 7. 服务验证
+## 回滚
 
-- [ ] `GET /ping` 返回 200。
-- [ ] `GET /livez` 返回 200。
-- [ ] `GET /readyz` 返回 200，且能证明 MySQL 与认证状态存储均可访问。
-- [ ] 注册、登录、鉴权、当前用户查询、昵称修改、密码修改链路验证通过。
-- [ ] 已验证改密后旧 Access/Refresh 失效、Refresh 重放吊销 Family、登录限流返回 429 与 `Retry-After`。
-- [ ] 应用日志中没有数据库连接失败或 JWT 配置缺失错误。
-
-## 8. 回滚准备
-
-- [ ] 保留上一个可用镜像版本。
-- [ ] 数据库变更有 down migration 或备份恢复方案。
-- [ ] 回滚命令已提前记录并演练。
-- [ ] 回滚后重新验证 `/readyz` 和核心接口。
+- [ ] 保留上一个已验证的固定版本镜像。
+- [ ] 记录应用镜像回滚和数据库恢复命令。
+- [ ] 回滚后重新验证 migration 版本、`/readyz` 和核心认证流程。
+- [ ] 发布负责人能够在目标恢复时间内完成演练。

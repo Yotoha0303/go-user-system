@@ -40,11 +40,16 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: go-user-system-secret
-                  key: DB_PASSWORD
-            - name: MYSQL_ROOT_HOST
-              value: "%"
+                  key: DB_ROOT_PASSWORD
             - name: MYSQL_DATABASE
               value: go_user_system
+            - name: MYSQL_USER
+              value: go_user_system
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: go-user-system-secret
+                  key: DB_PASSWORD
           args:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci

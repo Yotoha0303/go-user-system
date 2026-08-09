@@ -3,24 +3,37 @@ kind: Ingress
 metadata:
   name: go-user-system-ingress
   namespace: go-user-system
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
+  ingressClassName: nginx
   rules:
-  - host: your-domain.com
-    http:
-      paths:
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: go-user-system
-            port:
-              number: 8082
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: go-user-system-frontend
-            port:
-              number: 80
+    - host: go-user-system.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: go-user-system
+                port:
+                  name: http
+          - path: /swagger
+            pathType: Prefix
+            backend:
+              service:
+                name: go-user-system
+                port:
+                  name: http
+          - path: /ping
+            pathType: Exact
+            backend:
+              service:
+                name: go-user-system
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: go-user-system-frontend
+                port:
+                  name: http

@@ -8,6 +8,7 @@ import (
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
 	"go-user-system/internal/middleware"
+	"go-user-system/internal/request"
 	"go-user-system/internal/service"
 	"go-user-system/pkg/database"
 	"go-user-system/pkg/redisclient"
@@ -34,7 +35,9 @@ type appDeps struct {
 	initDB            func(cfg *config.Config) (*gorm.DB, error)
 	newAuthStateStore func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error)
 	newTokenManager   func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
-	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler
+	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler
+	bootstrapAdmin    func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error
+	getenv            func(key string) string
 	newServer         func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify            func(c chan<- os.Signal, sig ...os.Signal)
 	shutdownTimeout   time.Duration
@@ -58,12 +61,17 @@ func defaultAppDeps() appDeps {
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL)
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler {
 			return router.SetupRouter(db, logger, tokenManager, router.AuthRuntime{
-				StateStore:     stateStore,
-				LoginRateLimit: loginRateLimit,
+				StateStore:          stateStore,
+				LoginRateLimit:      loginRateLimit,
+				RegistrationEnabled: &registrationEnabled,
 			})
 		},
+		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
+			return service.NewUserService(db).BootstrapAdmin(ctx, req)
+		},
+		getenv: os.Getenv,
 		newServer: func(addr string, router http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
 				Addr:              addr,
@@ -96,9 +104,55 @@ var (
 // @name Authorization
 // @description 输入 Bearer access_token，例如：Bearer eyJhbGciOi...
 func main() {
-	if err := run(getDefaultAppDeps()); err != nil {
+	deps := getDefaultAppDeps()
+	var err error
+	if len(os.Args) > 1 && os.Args[1] == "bootstrap-admin" {
+		err = runBootstrapAdmin(deps)
+	} else {
+		err = run(deps)
+	}
+	if err != nil {
 		fatalf("application failed: %v", err)
 	}
+}
+
+func runBootstrapAdmin(deps appDeps) error {
+	if err := deps.loadEnv(); err != nil {
+		return err
+	}
+
+	username := deps.getenv("BOOTSTRAP_ADMIN_USERNAME")
+	password := deps.getenv("BOOTSTRAP_ADMIN_PASSWORD")
+	if username == "" || password == "" {
+		return errors.New("BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD are required")
+	}
+
+	cfg, err := deps.loadConfig("config.yml")
+	if err != nil {
+		return fmt.Errorf("load config failed: %w", err)
+	}
+	db, err := deps.initDB(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect database: %w", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get database handle failed: %w", err)
+	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			log.Printf("close database failed: %v", err)
+		}
+	}()
+
+	if err := deps.bootstrapAdmin(context.Background(), db, request.RegisterRequest{
+		Username: username,
+		Password: password,
+	}); err != nil {
+		return fmt.Errorf("bootstrap administrator failed: %w", err)
+	}
+	log.Printf("administrator %q bootstrapped", username)
+	return nil
 }
 
 func run(deps appDeps) error {
@@ -158,7 +212,7 @@ func run(deps appDeps) error {
 		AccountLimit: cfg.Auth.LoginRateLimit.AccountLimit,
 		IPLimit:      cfg.Auth.LoginRateLimit.IPLimit,
 		Window:       cfg.Auth.LoginRateLimit.Window,
-	})
+	}, cfg.Auth.RegistrationEnabled())
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

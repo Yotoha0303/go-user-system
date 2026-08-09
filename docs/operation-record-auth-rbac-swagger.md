@@ -2,6 +2,8 @@
 
 日期：2026-07-14
 
+> 历史说明：本文记录当时实现。自 `v1.0.0-rc.1` 起，普通注册只获得 `user` 角色，管理员改用 `bootstrap-admin` 初始化；Compose 也已通过一次性服务自动执行 migration。当前行为以根 README 和 `operation-record-public-delivery.md` 为准。
+
 ## 目标
 
 按 `docs/iteration-plan-auth-rbac-swagger.md` 完成后端迭代：

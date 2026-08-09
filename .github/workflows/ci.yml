@@ -16,12 +16,12 @@ concurrency:
 env:
   GOFLAGS: -mod=readonly
   GOOSE_VERSION: v3.27.3
+  GOVULNCHECK_VERSION: v1.6.0
 
 jobs:
-  quality:
-    name: Test, Vet, Validate, Build
+  backend:
+    name: Backend quality and security
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -35,8 +35,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+      - name: Install Go quality tools
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+          go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
 
       - name: Run golangci-lint
         run: golangci-lint run ./...
@@ -50,14 +53,118 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
-      - name: Install goose
-        run: go install github.com/pressly/goose/v3/cmd/goose@${GOOSE_VERSION}
+      - name: Scan reachable Go vulnerabilities
+        run: govulncheck ./...
 
       - name: Validate migrations
         run: goose -dir migrations validate
 
       - name: Build binary
-        run: go build -o bin/go-user-system ./cmd
+        run: go build -trimpath -o bin/go-user-system ./cmd
 
-      - name: Build Docker image
-        run: docker build -t go-user-system:ci .
+      - name: Build backend image
+        run: docker build -t go-user-system-backend:ci .
+
+  frontend:
+    name: Frontend quality and security
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Run frontend checks
+        run: npm run check
+
+      - name: Build frontend image
+        run: docker build -t go-user-system-frontend:ci .
+
+  manifests:
+    name: Validate deployment manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate Compose configuration
+        env:
+          DB_ROOT_PASSWORD: ci-root-password
+          DB_PASSWORD: ci-app-password
+          JWT_SECRET: ci_jwt_secret_at_least_32_characters_long
+        run: docker compose config --quiet
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSLo kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo install kubeconform /usr/local/bin/kubeconform
+
+      - name: Validate Kubernetes manifests
+        run: kubeconform -strict -summary -ignore-missing-schemas k8s
+
+      - name: Install gitleaks
+        run: |
+          curl -fsSLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan current source for secrets
+        run: gitleaks dir . --redact --no-banner
+
+  e2e:
+    name: Browser end-to-end flow
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, manifests]
+    env:
+      DB_ROOT_PASSWORD: e2e-root-password
+      DB_PASSWORD: e2e-app-password
+      JWT_SECRET: e2e_jwt_secret_at_least_32_characters_long
+      REGISTRATION_ENABLED: "true"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start full application stack
+        run: docker compose up -d --build --wait
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Print service logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop application stack
+        if: always()
+        run: docker compose down -v --remove-orphans

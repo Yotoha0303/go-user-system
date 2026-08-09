@@ -8,6 +8,7 @@ import (
 	"go-user-system/config"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
+	"go-user-system/internal/request"
 	"go-user-system/internal/service"
 	"log/slog"
 	"net/http"
@@ -131,9 +132,13 @@ func baseRunDeps(t *testing.T) appDeps {
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return &auth.TokenManager{}, nil
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler {
 			return http.NewServeMux()
 		},
+		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
+			return nil
+		},
+		getenv: func(key string) string { return "" },
 		newServer: func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer {
 			return &fakeAppServer{listenErr: http.ErrServerClosed}
 		},
@@ -154,11 +159,50 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.newAuthStateStore == nil {
 		t.Fatal("expected authentication state store factory")
 	}
-	if deps.setupRouter(nil, nil, &auth.TokenManager{}, authstate.NewMemoryStore(), service.LoginRateLimit{}) == nil {
+	if deps.setupRouter(nil, nil, &auth.TokenManager{}, authstate.NewMemoryStore(), service.LoginRateLimit{}, true) == nil {
 		t.Fatal("expected default router")
+	}
+	if deps.bootstrapAdmin == nil || deps.getenv == nil {
+		t.Fatal("expected administrator bootstrap dependencies")
 	}
 	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {
 		t.Fatal("expected default http server")
+	}
+}
+
+func TestRunBootstrapAdminRequiresCredentials(t *testing.T) {
+	deps := baseRunDeps(t)
+
+	err := runBootstrapAdmin(deps)
+
+	if err == nil || !strings.Contains(err.Error(), "BOOTSTRAP_ADMIN_USERNAME") {
+		t.Fatalf("expected missing bootstrap credentials error, got %v", err)
+	}
+}
+
+func TestRunBootstrapAdminCreatesAdministrator(t *testing.T) {
+	deps := baseRunDeps(t)
+	deps.getenv = func(key string) string {
+		values := map[string]string{
+			"BOOTSTRAP_ADMIN_USERNAME": "admin-user",
+			"BOOTSTRAP_ADMIN_PASSWORD": "strong-password",
+		}
+		return values[key]
+	}
+	called := false
+	deps.bootstrapAdmin = func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
+		called = true
+		if req.Username != "admin-user" || req.Password != "strong-password" {
+			t.Fatalf("unexpected bootstrap request: %+v", req)
+		}
+		return nil
+	}
+
+	if err := runBootstrapAdmin(deps); err != nil {
+		t.Fatalf("bootstrap administrator failed: %v", err)
+	}
+	if !called {
+		t.Fatal("expected bootstrap service to be called")
 	}
 }
 

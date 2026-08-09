@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore local scanner caches"
+paths = ['''^\.cache/''']
+
+[[allowlists]]
+description = "Allow fixed non-production JWT values used by Compose CI"
+regexTarget = "secret"
+regexes = ['''(?:ci|e2e)_jwt_secret_at_least_32_characters_long''']

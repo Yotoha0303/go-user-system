@@ -5,7 +5,8 @@ IMAGE_NAME := go-user-system:dev
 K8S_DIR := k8s
 K8S_NAMESPACE := go-user-system
 K8S_DEPLOYMENT := go-user-system
-K8S_IMAGE ?= $(APP_NAME):latest
+K8S_BACKEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.1
+K8S_FRONTEND_IMAGE ?= ghcr.io/yotoha0303/go-user-system-frontend:v1.0.0-rc.1
 KIND_NAME := go-user-system
 
 GOPATH := $(shell go env GOPATH)
@@ -20,7 +21,7 @@ CALLVIS_HTTP ?= 127.0.0.1:7878
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run test coverage coverage-html integration-test race-test vet lint lint-fix swagger callvis callvis-serve \
+.PHONY: help run test coverage coverage-html integration-test race-test vet lint lint-fix security frontend-check e2e bootstrap-admin swagger callvis callvis-serve \
 	build build-windows build-linux clean tidy \
 	goose-version migrate-create migrate-validate migrate-status migrate-version migrate-up migrate-up-by-one migrate-down migrate-redo migrate-reset migrate-fix \
 	docker-build compose-up compose-down compose-logs ci \
@@ -45,6 +46,10 @@ help:
 	@echo   coverage-html       Generate HTML coverage report
 	@echo   race-test           Run tests with race detector
 	@echo   vet                 Run go vet
+	@echo   security            Run backend and frontend dependency scans
+	@echo   frontend-check      Run frontend lint, tests and production build
+	@echo   e2e                 Run Playwright tests against the Compose stack
+	@echo   bootstrap-admin     Create the first admin using BOOTSTRAP_ADMIN_* env vars
 	@echo   swagger             Generate Swagger docs with swaggo
 	@echo   callvis             Generate the backend RTA call graph
 	@echo   callvis-serve       Start the interactive call graph viewer
@@ -114,6 +119,21 @@ race-test:
 
 vet:
 	go vet ./...
+
+security:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+	cd frontend && npm audit --audit-level=high --registry=https://registry.npmjs.org
+
+frontend-check:
+	cd frontend && npm ci && npm run check
+
+e2e:
+	cd frontend && npm run test:e2e
+
+bootstrap-admin:
+	$(if $(BOOTSTRAP_ADMIN_USERNAME),,$(error BOOTSTRAP_ADMIN_USERNAME is required))
+	$(if $(BOOTSTRAP_ADMIN_PASSWORD),,$(error BOOTSTRAP_ADMIN_PASSWORD is required))
+	docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD app bootstrap-admin
 
 swagger: export GOCACHE := $(SWAGGER_CACHE)
 swagger:
@@ -202,6 +222,8 @@ ci:
 	$(MAKE) test
 	$(MAKE) race-test
 	$(MAKE) vet
+	$(MAKE) security
+	$(MAKE) frontend-check
 	$(MAKE) build
 	$(MAKE) docker-build
 
@@ -210,29 +232,41 @@ k8s-namespace:
 	kubectl create namespace $(K8S_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 
 k8s-build:
-	docker build --platform linux/amd64 -t $(K8S_IMAGE) .
+	docker build --platform linux/amd64 -t $(K8S_BACKEND_IMAGE) .
+	docker build --platform linux/amd64 -t $(K8S_FRONTEND_IMAGE) ./frontend
 
 k8s-build-kind: k8s-build
-	kind load docker-image $(K8S_IMAGE) --name $(KIND_NAME)
+	kind load docker-image $(K8S_BACKEND_IMAGE) $(K8S_FRONTEND_IMAGE) --name $(KIND_NAME)
 
 # Bypass "kind load" for multi-arch images. kind uses --all-platforms
 # which fails when Docker only has linux/amd64 blobs.
 kind-load-deps:
 	docker pull --platform linux/amd64 mysql:8.4
 	docker pull --platform linux/amd64 redis:7.4-alpine
-	docker pull --platform linux/amd64 nginx:alpine
 	docker save mysql:8.4 | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/mysql:8.4 -
 	docker save redis:7.4-alpine | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/redis:7.4-alpine -
-	docker save nginx:alpine | docker exec -i $(KIND_NAME)-control-plane ctr -n k8s.io images import --platform linux/amd64 --base-name docker.io/library/nginx:alpine -
 
 k8s-build-push: k8s-build
-	docker push $(K8S_IMAGE)
+	docker push $(K8S_BACKEND_IMAGE)
+	docker push $(K8S_FRONTEND_IMAGE)
 
 k8s-deploy: k8s-namespace
-	kubectl apply -f $(K8S_DIR)/ --recursive
+	kubectl get secret go-user-system-secret -n $(K8S_NAMESPACE)
+	kubectl apply -f $(K8S_DIR)/configmap.yaml
+	kubectl apply -f $(K8S_DIR)/mysql.yaml
+	kubectl apply -f $(K8S_DIR)/redis.yaml
+	kubectl wait --for=condition=available deployment/go-user-system-mysql -n $(K8S_NAMESPACE) --timeout=600s
+	kubectl wait --for=condition=available deployment/go-user-system-redis -n $(K8S_NAMESPACE) --timeout=600s
+	kubectl apply -f $(K8S_DIR)/migration-job.yaml
+	kubectl wait --for=condition=complete job/go-user-system-migrate-v1-0-0-rc-1 -n $(K8S_NAMESPACE) --timeout=600s
+	kubectl apply -f $(K8S_DIR)/service.yaml
+	kubectl apply -f $(K8S_DIR)/frontend-service.yaml
+	kubectl apply -f $(K8S_DIR)/deployment.yaml
+	kubectl apply -f $(K8S_DIR)/frontend-deployment.yaml
+	kubectl apply -f $(K8S_DIR)/ingress.yaml
 
 k8s-undeploy:
-	kubectl delete -f $(K8S_DIR)/ --recursive --ignore-not-found=true
+	kubectl delete namespace $(K8S_NAMESPACE) --ignore-not-found=true
 
 k8s-status:
 	@echo "=== Backend ==="

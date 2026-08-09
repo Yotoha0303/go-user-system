@@ -240,7 +240,7 @@ POST   /api/v1/users/me/sessions/revoke-others
 
 RBAC：在 `00004` 后续 seed migration 或独立 migration 中插入权限码，并赋予 `user` / `admin` 角色。
 
-#### 前端（`go-user-system-frontend`）
+#### 前端（`frontend/`）
 
 - API：`src/api` 增加 sessions 相关方法。
 - 页面：安全中心增加「登录设备」列表、踢下线、下线其他设备。
@@ -321,7 +321,7 @@ docker compose config --quiet
 | Auth | `internal/auth/token_manager.go`、`internal/service/auth.go`、`internal/handler/user_handler.go` |
 | 数据 | `migrations/`、`internal/model/refresh_token.go`、`internal/repository/refresh_token.go` |
 | 路由 | `router/router.go`、`docs/http/test.http`、Swagger 注解 |
-| 前端 | 相邻 `go-user-system-frontend/src/api/*`、`src/pages/security/*`、登录页 device 上报 |
+| 前端 | `frontend/src/api/*`、`frontend/src/pages/security/*`、登录页 device 上报 |
 
 ## 实施状态
 
