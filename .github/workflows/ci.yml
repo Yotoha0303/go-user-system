@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "agent/**"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -130,6 +130,11 @@ jobs:
     name: Browser end-to-end flow
     runs-on: ubuntu-latest
     needs: [backend, frontend, manifests]
+    env:
+      DB_ROOT_PASSWORD: e2e-root-password
+      DB_PASSWORD: e2e-app-password
+      JWT_SECRET: e2e_jwt_secret_at_least_32_characters_long
+      REGISTRATION_ENABLED: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -150,11 +155,6 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start full application stack
-        env:
-          DB_ROOT_PASSWORD: e2e-root-password
-          DB_PASSWORD: e2e-app-password
-          JWT_SECRET: e2e_jwt_secret_at_least_32_characters_long
-          REGISTRATION_ENABLED: "true"
         run: docker compose up -d --build --wait
 
       - name: Run Playwright tests
