@@ -28,48 +28,8 @@ func prepareAuthIntegrationDB(t *testing.T) *gorm.DB {
 	sqlDB.SetMaxOpenConns(5)
 	sqlDB.SetMaxIdleConns(5)
 	testutil.ResetTables(t, db, "refresh_tokens", "users")
-
-	statements := []string{
-		`CREATE TABLE users (
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			username VARCHAR(64) NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			nickname VARCHAR(64) NOT NULL DEFAULT '',
-			status TINYINT NOT NULL DEFAULT 1,
-			auth_version BIGINT NOT NULL DEFAULT 1,
-			created_at DATETIME(3) NULL,
-			updated_at DATETIME(3) NULL,
-			last_login_at DATETIME(3) NULL,
-			deleted_at DATETIME(3) NULL,
-			PRIMARY KEY (id),
-			UNIQUE KEY idx_username (username),
-			KEY idx_users_deleted_at (deleted_at)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-		`CREATE TABLE refresh_tokens (
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			user_id BIGINT NOT NULL,
-			jti VARCHAR(64) NOT NULL,
-			family_id VARCHAR(64) NOT NULL,
-			token_hash CHAR(64) NOT NULL,
-			expires_at DATETIME(3) NOT NULL,
-			revoked_at DATETIME(3) NULL,
-			revoked_reason VARCHAR(32) NULL,
-			replaced_by_jti VARCHAR(64) NULL,
-			created_at DATETIME(3) NULL,
-			updated_at DATETIME(3) NULL,
-			PRIMARY KEY (id),
-			UNIQUE KEY uk_refresh_tokens_jti (jti),
-			UNIQUE KEY uk_refresh_tokens_hash (token_hash),
-			KEY idx_refresh_tokens_user_id (user_id),
-			KEY idx_refresh_tokens_family_id (family_id),
-			KEY idx_refresh_tokens_expires_at (expires_at)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-	}
-	for _, statement := range statements {
-		if err := db.Exec(statement).Error; err != nil {
-			t.Fatalf("prepare auth integration schema failed: %v", err)
-		}
-	}
+	testutil.CreateUsersTable(t, db)
+	testutil.CreateRefreshTokensTable(t, db)
 
 	t.Cleanup(func() {
 		testutil.ResetTables(t, db, "refresh_tokens", "users")

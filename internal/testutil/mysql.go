@@ -17,6 +17,66 @@ import (
 const TestDatabaseDSNEnv = "TEST_DATABASE_DSN"
 const mysqlIntegrationLockName = "go_user_system_integration_tests"
 
+const createUsersTableSQL = `CREATE TABLE users (
+	id BIGINT NOT NULL AUTO_INCREMENT,
+	username VARCHAR(64) NOT NULL,
+	password_hash VARCHAR(255) NOT NULL,
+	nickname VARCHAR(64) NOT NULL DEFAULT '',
+	status TINYINT NOT NULL DEFAULT 1,
+	auth_version BIGINT NOT NULL DEFAULT 1,
+	created_at DATETIME(3) NULL DEFAULT NULL,
+	updated_at DATETIME(3) NULL DEFAULT NULL,
+	last_login_at DATETIME(3) NULL DEFAULT NULL,
+	deleted_at DATETIME(3) NULL DEFAULT NULL,
+	PRIMARY KEY (id),
+	UNIQUE KEY idx_username (username),
+	KEY idx_users_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
+
+//nolint:gosec // Schema column names are not credentials.
+const createRefreshTokensTableSQL = `CREATE TABLE refresh_tokens (
+	id BIGINT NOT NULL AUTO_INCREMENT,
+	user_id BIGINT NOT NULL,
+	jti VARCHAR(64) NOT NULL,
+	family_id VARCHAR(64) NOT NULL,
+	token_hash CHAR(64) NOT NULL,
+	expires_at DATETIME(3) NOT NULL,
+	revoked_at DATETIME(3) NULL DEFAULT NULL,
+	revoked_reason VARCHAR(32) NULL DEFAULT NULL,
+	replaced_by_jti VARCHAR(64) NULL DEFAULT NULL,
+	created_at DATETIME(3) NULL DEFAULT NULL,
+	updated_at DATETIME(3) NULL DEFAULT NULL,
+	PRIMARY KEY (id),
+	UNIQUE KEY uk_refresh_tokens_jti (jti),
+	UNIQUE KEY uk_refresh_tokens_hash (token_hash),
+	KEY idx_refresh_tokens_user_id (user_id),
+	KEY idx_refresh_tokens_family_id (family_id),
+	KEY idx_refresh_tokens_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
+
+const createRolesTableSQL = `CREATE TABLE roles (
+	id BIGINT NOT NULL AUTO_INCREMENT,
+	code VARCHAR(64) NOT NULL,
+	name VARCHAR(64) NOT NULL,
+	created_at DATETIME(3) NULL DEFAULT NULL,
+	updated_at DATETIME(3) NULL DEFAULT NULL,
+	PRIMARY KEY (id),
+	UNIQUE KEY uk_roles_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
+
+const createUserRolesTableSQL = `CREATE TABLE user_roles (
+	user_id BIGINT NOT NULL,
+	role_id BIGINT NOT NULL,
+	created_at DATETIME(3) NULL DEFAULT NULL,
+	PRIMARY KEY (user_id, role_id),
+	KEY idx_user_roles_role_id (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`
+
+const seedRolesSQL = `INSERT INTO roles (code, name, created_at, updated_at)
+VALUES
+	('admin', 'admin', NOW(3), NOW(3)),
+	('user', 'user', NOW(3), NOW(3))`
+
 var openMySQLDB = func(dsn string) (*gorm.DB, error) {
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
@@ -84,6 +144,40 @@ func ResetTables(t testing.TB, db *gorm.DB, tableNames ...string) {
 	for _, tableName := range tableNames {
 		if err := db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteIdentifier(t, tableName))).Error; err != nil {
 			t.Fatalf("drop table %s failed: %v", tableName, err)
+		}
+	}
+}
+
+func CreateUsersTable(t testing.TB, db *gorm.DB) {
+	t.Helper()
+
+	if err := db.Exec(createUsersTableSQL).Error; err != nil {
+		t.Fatalf("create users table failed: %v", err)
+	}
+}
+
+func CreateRefreshTokensTable(t testing.TB, db *gorm.DB) {
+	t.Helper()
+
+	if err := db.Exec(createRefreshTokensTableSQL).Error; err != nil {
+		t.Fatalf("create refresh tokens table failed: %v", err)
+	}
+}
+
+func CreateRoleAssignmentTables(t testing.TB, db *gorm.DB) {
+	t.Helper()
+
+	statements := []struct {
+		name string
+		sql  string
+	}{
+		{name: "roles", sql: createRolesTableSQL},
+		{name: "user_roles", sql: createUserRolesTableSQL},
+		{name: "role seeds", sql: seedRolesSQL},
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement.sql).Error; err != nil {
+			t.Fatalf("create %s failed: %v", statement.name, err)
 		}
 	}
 }

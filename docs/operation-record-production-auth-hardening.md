@@ -67,6 +67,14 @@
 
 示例：默认账号 5 次、IP 20 次、窗口 15 分钟。
 
+问题：旧 MySQL 集成测试清理表后没有统一重建当前认证与 RBAC schema。
+
+原因：测试库为空时 DAO 和注册用例直接访问 `users`、`roles`、`user_roles`，导致用例依赖外部残留表，无法稳定复现。
+
+修改建议：在 `internal/testutil` 集中维护测试所需的当前最小 schema，每个夹具先清理再显式创建，并继续使用命名测试库和数据库级锁隔离。
+
+示例：DAO、UserService 和 AuthService 集成夹具统一调用 `CreateUsersTable`、`CreateRefreshTokensTable` 或 `CreateRoleAssignmentTables`。
+
 ## 验证记录
 
 - `go test ./...`：通过。
@@ -78,5 +86,6 @@
 - `docker compose config --quiet`：通过。
 - Kubernetes 离线严格校验：15 个资源全部有效。
 - Swagger 文档：已重新生成。
-- MySQL 并发轮换与改密集成测试：测试代码已写入并由 `TEST_DATABASE_DSN` 控制；本机未配置测试 DSN，执行时明确跳过。
-- Docker 运行验证：Docker daemon 未启动，因此未执行临时 MySQL 容器和镜像构建；Compose 静态配置校验已通过。
+- MySQL 集成测试：在独立的 `go_user_system_codex_test` 库中执行 7 个 DAO/Service 用例并全部通过，结束后已删除测试库。
+- 本地运行验证：启用本机 Redis 后启动构建产物，`/ping`、`/livez`、`/readyz` 和 `/swagger/index.html` 均返回 200。
+- Docker 运行验证：Docker daemon 未启动，因此未重复执行容器和镜像运行验证；Compose 静态配置校验已通过。

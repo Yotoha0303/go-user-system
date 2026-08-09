@@ -822,10 +822,12 @@ func prepareUserServiceIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	db := testutil.OpenMySQL(t)
-	testutil.ResetTables(t, db, "schema_migrations", "users")
+	testutil.ResetTables(t, db, "user_roles", "roles", "schema_migrations", "users")
+	testutil.CreateUsersTable(t, db)
+	testutil.CreateRoleAssignmentTables(t, db)
 
 	t.Cleanup(func() {
-		testutil.ResetTables(t, db, "schema_migrations", "users")
+		testutil.ResetTables(t, db, "user_roles", "roles", "schema_migrations", "users")
 		testutil.CloseMySQL(t, db)
 	})
 
@@ -862,6 +864,17 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 	}
 	if storedUser.Status != model.UserStatusActive {
 		t.Fatalf("expected active status, got %d", storedUser.Status)
+	}
+	var roleCodes []string
+	if err := db.Table("user_roles AS ur").
+		Joins("JOIN roles AS r ON r.id = ur.role_id").
+		Where("ur.user_id = ?", storedUser.ID).
+		Order("r.code ASC").
+		Pluck("r.code", &roleCodes).Error; err != nil {
+		t.Fatalf("list registered user roles failed: %v", err)
+	}
+	if len(roleCodes) != 2 || roleCodes[0] != model.RoleCodeAdmin || roleCodes[1] != model.RoleCodeUser {
+		t.Fatalf("expected first user roles [admin user], got %v", roleCodes)
 	}
 
 	err = userService.Register(ctx, request.RegisterRequest{

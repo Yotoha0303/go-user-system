@@ -182,6 +182,20 @@ func TestResetTablesDropsProvidedTables(t *testing.T) {
 	ResetTables(t, db, "schema_migrations", "users")
 }
 
+func TestCreateAuthTables(t *testing.T) {
+	db := openTestutilGormDB(t)
+	t.Cleanup(func() {
+		sqlDB, err := db.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	CreateUsersTable(t, db)
+	CreateRefreshTokensTable(t, db)
+	CreateRoleAssignmentTables(t, db)
+}
+
 func TestUniqueNameUsesPrefix(t *testing.T) {
 	name := UniqueName(t, "user")
 

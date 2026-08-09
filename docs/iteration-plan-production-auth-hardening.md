@@ -86,6 +86,7 @@
 ## 实施状态
 
 - 完成时间：2026-08-09
-- 自动化结果：单元测试、race、vet、golangci-lint、构建、Goose migration、Compose 配置和 Kubernetes 离线 schema 校验通过。
-- 并发证据：可执行的锁语义单元测试已通过；另保留真实 MySQL 并发与改密集成测试，由 `TEST_DATABASE_DSN` 控制。
-- 环境限制：本次机器未配置 `TEST_DATABASE_DSN`，Docker daemon 也未运行，因此真实 MySQL 集成测试在本次执行中明确跳过；未把跳过结果记为已运行。
+- 自动化结果：单元测试、真实 MySQL 集成测试、race、vet、golangci-lint、构建、Goose migration、Compose 配置和 Kubernetes 离线 schema 校验通过。
+- 并发证据：锁语义单元测试和真实 MySQL 并发轮换、重放吊销、改密失效集成测试均已通过；集成测试仍由 `TEST_DATABASE_DSN` 控制并拒绝非测试库。
+- 运行证据：启用本机 Redis 后启动后端二进制，`/ping`、`/livez`、`/readyz` 和 `/swagger/index.html` 均返回 200。
+- 环境限制：Docker daemon 未运行，因此没有重复执行容器和镜像运行验证；Compose 静态配置已通过。

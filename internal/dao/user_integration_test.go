@@ -16,6 +16,7 @@ func prepareUserDAOIntegrationDB(t *testing.T) *gorm.DB {
 
 	db := testutil.OpenMySQL(t)
 	testutil.ResetTables(t, db, "schema_migrations", "users")
+	testutil.CreateUsersTable(t, db)
 
 	t.Cleanup(func() {
 		testutil.ResetTables(t, db, "schema_migrations", "users")
