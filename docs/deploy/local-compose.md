@@ -5,7 +5,7 @@
 ## 1. 前置条件
 
 - 已安装 Docker Desktop，或 Docker Engine + Docker Compose。
-- Docker 可以拉取 `golang:1.25.5-alpine`、`alpine:3.22`、`mysql:8.4`、`redis:7.4-alpine`。
+- Docker 可以拉取 `golang:1.25.7-alpine`、`alpine:3.22`、`mysql:8.4`、`redis:7.4-alpine`。
 - 本地端口 `8082` 和 `3306` 未被占用。
 - 已复制 `.env.example` 为 `.env`。
 - 已复制 `.env.goose.example` 为 `.env.goose`。

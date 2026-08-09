@@ -1,6 +1,6 @@
 module go-user-system
 
-go 1.25.5
+go 1.25.7
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0

@@ -15,7 +15,7 @@ concurrency:
 
 env:
   GOFLAGS: -mod=readonly
-  GOOSE_VERSION: v3.27.1
+  GOOSE_VERSION: v3.27.3
 
 jobs:
   quality:

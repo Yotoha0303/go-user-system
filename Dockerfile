@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.25.5-alpine AS builder
+FROM golang:1.25.7-alpine AS builder
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Install goose for database migrations (GOTOOLCHAIN=auto allows Go to download the required toolchain)
-RUN GOTOOLCHAIN=auto go install github.com/pressly/goose/v3/cmd/goose@latest
+# Install the migration CLI with the same pinned version used by CI.
+RUN GOTOOLCHAIN=local go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
 
 COPY . .
 
