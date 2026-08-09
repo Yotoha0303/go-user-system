@@ -130,7 +130,7 @@ curl http://127.0.0.1:8082/readyz
 前置条件：
 
 - 安装 Go。
-- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@latest`。
+- 安装 goose：`go install github.com/pressly/goose/v3/cmd/goose@v3.27.1`。
 - 启动 MySQL；启用 `REDIS_ENABLED=true` 时还需启动 Redis。
 - 创建数据库 `go_user_system`。
 - 复制并配置 `.env` 和 `.env.goose`。
@@ -324,7 +324,7 @@ CI 文件：`.github/workflows/ci.yml`
 4. `go test ./...`
 5. `go test -race ./...`
 6. `go vet ./...`
-7. `go install github.com/pressly/goose/v3/cmd/goose@latest`
+7. `go install github.com/pressly/goose/v3/cmd/goose@v3.27.1`
 8. `goose -dir migrations validate`
 9. `go build -o bin/go-user-system ./cmd`
 10. `docker build -t go-user-system:ci .`
