@@ -8,6 +8,7 @@
 | 基线提交 | `eae81f1b2f1b89f41a97d8290f0f232f59ba507b` |
 | 实施分支 | `agent/auth-delivery-hardening` |
 | 实施提交 | `8e31f0a` (`fix: harden browser authentication delivery`) |
+| 合并 PR | [#12](https://github.com/Yotoha0303/go-user-system/pull/12) |
 | 目标版本 | `v1.0.0-rc.3` |
 | 实施日期 | `2026-08-10` |
 
