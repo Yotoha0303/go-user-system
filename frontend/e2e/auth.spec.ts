@@ -38,7 +38,12 @@ test("user can register, restore two tabs, and revoke access on sign out", async
 
   await expect(page).toHaveURL(/\/profile$/);
   await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-  await expect(page.getByText(username, { exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Account details" })
+      .getByText(username, { exact: true })
+      .first()
+  ).toBeVisible();
 
   const secondTab = await context.newPage();
   secondTab.on("console", captureConsoleError);

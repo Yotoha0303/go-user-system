@@ -89,7 +89,8 @@ npm --prefix frontend run check
 - 后端 `/readyz` 返回 `status=ready`。
 - Playwright Desktop Chrome 与 Pixel 7 项目重新执行，注册、登录、双标签页恢复、资料页、登出和 Access 吊销 2 项全部通过。
 - 验收后删除隔离容器、网络和数据卷。
-- 远程 CI 结果将在 PR 合并后由 GitHub Actions 留存。
+- 可访问性修复后的远程 E2E 首次失败：全页用户名定位的第一个匹配变为关闭抽屉中的隐藏文本。测试改为限定 `Account details` 区域，避免把隐藏导航内容误判为资料正文。
+- 最终远程 CI 结果将在 PR 合并后由 GitHub Actions 留存。
 
 ## 边界与后续
 
