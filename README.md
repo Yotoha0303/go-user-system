@@ -8,7 +8,7 @@
 
 当前公开交付版本为 `v1.0.0-rc.3`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
 
-![Go User System sign-in screen](docs/assets/application-home.png)
+![Go User System sign-in screen](docs/assets/application-home.webp)
 
 ## 功能
 
@@ -21,7 +21,7 @@
 - RBAC 角色、权限、用户角色和角色权限模型，以及接口级权限中间件。
 - 显式一次性管理员初始化，普通注册不再获得管理员权限。
 - 可关闭的公开注册入口：`REGISTRATION_ENABLED=false`。
-- React 管理界面、内存 Access Token、Cookie 会话恢复和权限路由。
+- 响应式 React 管理工作台、内存 Access Token、Cookie 会话恢复和权限路由。
 - Swagger、健康检查、结构化日志、Request ID、超时和优雅关闭。
 - Compose 全栈、Kubernetes、CI、CodeQL、Dependabot 和 GHCR 发布。
 
@@ -210,6 +210,7 @@ GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并�
 - `docs/iteration-plan-production-auth-hardening.md`：生产认证加固设计。
 - `docs/operation-record-production-auth-hardening.md`：认证加固操作记录。
 - `docs/operation-record-auth-delivery-hardening.md`：`rc.3` 浏览器认证、代理和生产配置加固记录。
+- `docs/operation-record-frontend-modernization.md`：响应式前端工作台改造、视觉验收和交付记录。
 - `ROADMAP.md`：稳定版和后续能力规划。
 - `CHANGELOG.md`：版本变更。
 

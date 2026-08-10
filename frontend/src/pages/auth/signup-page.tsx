@@ -70,7 +70,7 @@ const SignupPage = () => {
       footer={
         <>
           Already registered?{" "}
-          <Link className="font-semibold text-blue-700 hover:text-blue-800" to="/auth/login">
+          <Link className="font-semibold text-teal-700 hover:text-teal-900" to="/auth/login">
             Sign in
           </Link>
         </>
@@ -80,7 +80,7 @@ const SignupPage = () => {
         {submissionError ? <Alert>{submissionError}</Alert> : null}
 
         <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-800" htmlFor="username">
+          <label className="mb-2 block text-sm font-semibold text-slate-800" htmlFor="username">
             Username
           </label>
           <Input
@@ -94,7 +94,7 @@ const SignupPage = () => {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-800" htmlFor="password">
+          <label className="mb-2 block text-sm font-semibold text-slate-800" htmlFor="password">
             Password
           </label>
           <Input
@@ -109,7 +109,7 @@ const SignupPage = () => {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-semibold text-slate-800" htmlFor="confirm-password">
+          <label className="mb-2 block text-sm font-semibold text-slate-800" htmlFor="confirm-password">
             Confirm password
           </label>
           <Input
