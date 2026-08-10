@@ -29,13 +29,18 @@ describe("Navbar", () => {
     );
 
     const openButton = screen.getByRole("button", { name: "Open navigation" });
+    const sidebar = document.getElementById("primary-sidebar");
     expect(openButton).toHaveAttribute("aria-expanded", "false");
+    expect(sidebar).toHaveClass("invisible", "overflow-y-auto");
 
     await user.click(openButton);
     expect(openButton).toHaveAttribute("aria-expanded", "true");
+    expect(sidebar).toHaveClass("visible");
+    expect(sidebar).not.toHaveClass("invisible");
 
     await user.click(screen.getAllByRole("button", { name: "Close navigation" })[0]);
     expect(openButton).toHaveAttribute("aria-expanded", "false");
+    expect(sidebar).toHaveClass("invisible");
   });
 
   it("clears local session even when server logout fails", async () => {

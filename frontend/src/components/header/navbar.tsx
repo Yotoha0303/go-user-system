@@ -122,11 +122,13 @@ const Navbar = () => {
 
       <aside
         id="primary-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-white/10 bg-[#162024] px-4 py-5 transition-transform duration-200 lg:w-64 lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-y-auto overscroll-contain border-r border-white/10 bg-[#162024] px-4 py-5 transition-transform duration-200 lg:visible lg:w-64 lg:translate-x-0 ${
+          mobileOpen
+            ? "visible translate-x-0"
+            : "invisible -translate-x-full"
         }`}
       >
-        <div className="flex h-10 items-center px-2">
+        <div className="flex h-10 shrink-0 items-center px-2">
           <NavLink to="/profile" className="mr-auto min-w-0" aria-label="Go User System home">
             <BrandMark inverse />
           </NavLink>
@@ -141,10 +143,13 @@ const Navbar = () => {
           </button>
         </div>
 
-        <div className="mt-8 px-3 text-xs font-bold uppercase text-slate-500">
+        <div className="mt-8 shrink-0 px-3 text-xs font-bold uppercase text-slate-500">
           Workspace
         </div>
-        <nav aria-label="Primary navigation" className="mt-3 space-y-1">
+        <nav
+          aria-label="Primary navigation"
+          className="mt-3 shrink-0 space-y-1"
+        >
           <NavLink to="/profile" end className={navLinkClass}>
             <UserRound className="h-4 w-4" aria-hidden="true" />
             Profile
@@ -161,7 +166,7 @@ const Navbar = () => {
           ) : null}
         </nav>
 
-        <div className="mt-auto border-t border-white/10 pt-4">
+        <div className="mt-auto shrink-0 border-t border-white/10 pt-4">
           <div className="mb-3 flex min-w-0 items-center gap-3 px-2">
             <span
               className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-teal-400 text-sm font-bold text-slate-950"
