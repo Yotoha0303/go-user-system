@@ -209,6 +209,7 @@ GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并�
 - `docs/iteration-plan-public-delivery.md`：候选版本交付计划。
 - `docs/iteration-plan-production-auth-hardening.md`：生产认证加固设计。
 - `docs/operation-record-production-auth-hardening.md`：认证加固操作记录。
+- `docs/operation-record-auth-delivery-hardening.md`：`rc.3` 浏览器认证、代理和生产配置加固记录。
 - `ROADMAP.md`：稳定版和后续能力规划。
 - `CHANGELOG.md`：版本变更。
 
