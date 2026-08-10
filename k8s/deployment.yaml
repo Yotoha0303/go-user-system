@@ -19,7 +19,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: app
-          image: ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.2
+          image: ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -70,6 +70,21 @@ spec:
                 configMapKeyRef:
                   name: go-user-system-config
                   key: REDIS_ADDR
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: APP_ENV
+            - name: COOKIE_SECURE
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: COOKIE_SECURE
+            - name: TRUSTED_PROXIES
+              valueFrom:
+                configMapKeyRef:
+                  name: go-user-system-config
+                  key: TRUSTED_PROXIES
           resources:
             requests:
               cpu: "100m"

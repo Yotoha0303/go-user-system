@@ -313,12 +313,24 @@ func TestRegisterValidatesPasswordLength(t *testing.T) {
 	}
 }
 
+func TestValidatePasswordBoundaries(t *testing.T) {
+	if err := validatePassword("12345678901"); !errors.Is(err, ErrPasswordTooShortOrTooLong) {
+		t.Fatalf("expected 11-character password rejection, got %v", err)
+	}
+	if err := validatePassword("123456789012"); err != nil {
+		t.Fatalf("expected 12-character password acceptance, got %v", err)
+	}
+	if err := validatePassword(strings.Repeat("a", MaxPasswordBytes+1)); !errors.Is(err, ErrPasswordTooShortOrTooLong) {
+		t.Fatalf("expected password over %d bytes rejection, got %v", MaxPasswordBytes, err)
+	}
+}
+
 func TestRegisterRequiresDatabase(t *testing.T) {
 	userService := NewUserService(nil)
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "123456",
+		Password: "123456789012",
 	})
 
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
@@ -405,7 +417,7 @@ func TestRegisterCreatesActiveUserWithTrimmedUsernameAndHashedPassword(t *testin
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "  alice  ",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if err != nil {
@@ -426,10 +438,10 @@ func TestRegisterCreatesActiveUserWithTrimmedUsernameAndHashedPassword(t *testin
 	if store.createdUser.Status != model.UserStatusActive {
 		t.Fatalf("expected active status, got %d", store.createdUser.Status)
 	}
-	if store.createdUser.PasswordHash == "password123" {
+	if store.createdUser.PasswordHash == "password1234" {
 		t.Fatal("expected password hash, got plain text")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(store.createdUser.PasswordHash), []byte("password123")); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(store.createdUser.PasswordHash), []byte("password1234")); err != nil {
 		t.Fatalf("password hash does not match: %v", err)
 	}
 }
@@ -445,7 +457,7 @@ func TestRegisterAssignsUserRoleToRegularUser(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if err != nil {
@@ -467,7 +479,7 @@ func TestRegisterAssignsOnlyUserRoleToFirstUser(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if err != nil {
@@ -484,7 +496,7 @@ func TestRegisterRejectsExistingUsername(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if !errors.Is(err, ErrUsernameAlreadyExists) {
@@ -498,19 +510,19 @@ func TestRegisterWrapsUsernameLookupError(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
 }
 
-func TestRegisterWrapsPasswordHashError(t *testing.T) {
+func TestRegisterRejectsPasswordOverBcryptLimit(t *testing.T) {
 	store := &fakeUserStore{userByUsernameErr: gorm.ErrRecordNotFound}
 	userService := newUnitUserService(store)
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: strings.Repeat("a", 55),
+		Password: strings.Repeat("a", MaxPasswordBytes+1),
 	})
 
 	assertServiceAppError(t, err, http.StatusBadRequest, response.CodeInvalidParams)
@@ -525,7 +537,7 @@ func TestRegisterWrapsCreateUserError(t *testing.T) {
 
 	err := userService.Register(context.Background(), request.RegisterRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeRegisterFailed)
@@ -537,7 +549,7 @@ func TestLoginMapsMissingUserToInvalidCredentials(t *testing.T) {
 
 	_, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -551,18 +563,18 @@ func TestLoginWrapsUsernameLookupError(t *testing.T) {
 
 	_, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeLoginFailed)
 }
 
-func TestLoginRejectsDisabledUser(t *testing.T) {
+func TestLoginMapsDisabledUserToInvalidCredentials(t *testing.T) {
 	store := &fakeUserStore{
 		userByUsername: &model.User{
 			ID:           1,
 			Username:     "alice",
-			PasswordHash: passwordHash(t, "password123"),
+			PasswordHash: passwordHash(t, "password1234"),
 			Status:       model.UserStatusDisabled,
 		},
 	}
@@ -570,11 +582,11 @@ func TestLoginRejectsDisabledUser(t *testing.T) {
 
 	_, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
-	if !errors.Is(err, ErrUserDisabled) {
-		t.Fatalf("expected ErrUserDisabled, got %v", err)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 	}
 }
 
@@ -583,7 +595,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 		userByUsername: &model.User{
 			ID:           1,
 			Username:     "alice",
-			PasswordHash: passwordHash(t, "password123"),
+			PasswordHash: passwordHash(t, "password1234"),
 			Status:       model.UserStatusActive,
 		},
 	}
@@ -604,7 +616,7 @@ func TestLoginWrapsLastLoginUpdateError(t *testing.T) {
 		userByUsername: &model.User{
 			ID:           1,
 			Username:     "alice",
-			PasswordHash: passwordHash(t, "password123"),
+			PasswordHash: passwordHash(t, "password1234"),
 			Status:       model.UserStatusActive,
 		},
 		updateLastLoginErr: errors.New("update failed"),
@@ -613,7 +625,7 @@ func TestLoginWrapsLastLoginUpdateError(t *testing.T) {
 
 	_, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "alice",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	assertServiceAppError(t, err, http.StatusInternalServerError, response.CodeLoginFailed)
@@ -624,7 +636,7 @@ func TestLoginReturnsUserAndUpdatesLastLogin(t *testing.T) {
 		userByUsername: &model.User{
 			ID:           1,
 			Username:     "alice",
-			PasswordHash: passwordHash(t, "password123"),
+			PasswordHash: passwordHash(t, "password1234"),
 			Status:       model.UserStatusActive,
 		},
 	}
@@ -632,7 +644,7 @@ func TestLoginReturnsUserAndUpdatesLastLogin(t *testing.T) {
 
 	user, err := userService.Login(context.Background(), request.LoginRequest{
 		Username: "  alice  ",
-		Password: "password123",
+		Password: "password1234",
 	})
 
 	if err != nil {
@@ -828,7 +840,7 @@ func TestUserServiceIntegrationRegisterLoginProfileAndNickname(t *testing.T) {
 	userService := NewUserService(db)
 	ctx := context.Background()
 	username := testutil.UniqueName(t, "svc_user")
-	password := "password123"
+	password := "password1234"
 
 	err := userService.Register(ctx, request.RegisterRequest{
 		Username: "  " + username + "  ",
@@ -926,7 +938,7 @@ func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
 	userService := NewUserService(db)
 	ctx := context.Background()
 	username := testutil.UniqueName(t, "disabled_user")
-	password := "password123"
+	password := "password1234"
 
 	hashBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -947,8 +959,8 @@ func TestUserServiceIntegrationRejectsDisabledUser(t *testing.T) {
 		Username: username,
 		Password: password,
 	})
-	if !errors.Is(err, ErrUserDisabled) {
-		t.Fatalf("expected ErrUserDisabled on login, got %v", err)
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected ErrInvalidCredentials on login, got %v", err)
 	}
 
 	_, err = userService.GetProfile(ctx, disabledUser.ID)

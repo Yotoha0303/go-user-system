@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 See `ROADMAP.md` for planned work.
 
+## [1.0.0-rc.3] - 2026-08-10
+
+### Changed
+
+- Raised the password policy to at least 12 characters with the bcrypt 72-byte ceiling enforced.
+- Added explicit runtime environment, secure refresh-cookie, and trusted-proxy configuration.
+- Kubernetes defaults now require TLS and production-safe Redis-backed authentication state.
+
+### Security
+
+- Browser logout now presents and revokes the current Access Token JTI.
+- Refresh rotation is serialized across browser tabs with the Web Locks API.
+- Login IP rate limiting now honors forwarded addresses only from configured trusted proxies.
+- Disabled, missing, and wrong-password login attempts now share the same external response and rate-limit path.
+- Configuration rejects unsupported RS256 instead of silently issuing HS256 tokens.
+
 ## [1.0.0-rc.2] - 2026-08-10
 
 ### Changed

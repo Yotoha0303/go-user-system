@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/model"
@@ -125,7 +126,7 @@ func TestRegisterHandlerReturnsSuccess(t *testing.T) {
 		userHandler.RegisterHandler,
 		http.MethodPost,
 		"/register",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -151,7 +152,7 @@ func TestRegisterHandlerMapsServiceError(t *testing.T) {
 		userHandler.RegisterHandler,
 		http.MethodPost,
 		"/register",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -178,7 +179,7 @@ func TestRegisterHandlerMapsWrappedAppErrorWithCause(t *testing.T) {
 		userHandler.RegisterHandler,
 		http.MethodPost,
 		"/register",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -198,7 +199,7 @@ func TestRegisterHandlerMapsPlainErrorToFallback(t *testing.T) {
 		userHandler.RegisterHandler,
 		http.MethodPost,
 		"/register",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -274,7 +275,7 @@ func TestLoginHandlerReturnsTokenAndUser(t *testing.T) {
 		userHandler.LoginHandler,
 		http.MethodPost,
 		"/login",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -514,7 +515,7 @@ func TestLoginHandlerClearsAccountFailuresAfterSuccess(t *testing.T) {
 		userHandler.LoginHandler,
 		http.MethodPost,
 		"/login",
-		`{"username":"alice","password":"password123"}`,
+		`{"username":"alice","password":"password1234"}`,
 	)
 
 	if recorder.Code != http.StatusOK {
@@ -544,7 +545,7 @@ func TestLoginHandlerMapsTokenGenerationError(t *testing.T) {
 		userHandler.LoginHandler,
 		http.MethodPost,
 		"/login",
-		`{"username":"alice","password":"123456"}`,
+		`{"username":"alice","password":"123456789012"}`,
 	)
 
 	body := decodeResponse(t, recorder)
@@ -573,6 +574,72 @@ func TestLoginHandlerMapsInvalidCredentials(t *testing.T) {
 	}
 	if body.Code != response.CodeLoginFailed {
 		t.Fatalf("expected code %d, got %d", response.CodeLoginFailed, body.Code)
+	}
+}
+
+func TestLoginHandlerUsesForwardedIPOnlyFromTrustedProxy(t *testing.T) {
+	tests := []struct {
+		name           string
+		trustedProxies []string
+		forwardedFor   string
+		expectedIP     string
+	}{
+		{name: "trusted proxy", trustedProxies: []string{"192.0.2.10"}, forwardedFor: "198.51.100.25", expectedIP: "198.51.100.25"},
+		{name: "spoofed prefix", trustedProxies: []string{"192.0.2.10"}, forwardedFor: "203.0.113.66, 198.51.100.25", expectedIP: "198.51.100.25"},
+		{name: "untrusted proxy", trustedProxies: nil, forwardedFor: "198.51.100.25", expectedIP: "192.0.2.10"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeService := &fakeUserService{loginErr: service.ErrInvalidCredentials}
+			sessionService := &fakeAuthSessionService{}
+			userHandler := NewUserHandler(fakeService, testTokenManager(t), sessionService)
+			gin.SetMode(gin.TestMode)
+			router := gin.New()
+			if err := router.SetTrustedProxies(tt.trustedProxies); err != nil {
+				t.Fatalf("set trusted proxies failed: %v", err)
+			}
+			router.POST("/login", userHandler.LoginHandler)
+
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBufferString(`{"username":"alice","password":"password1234"}`))
+			req.RemoteAddr = "192.0.2.10:12345"
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Forwarded-For", tt.forwardedFor)
+			router.ServeHTTP(recorder, req)
+
+			if sessionService.checkedIP != tt.expectedIP {
+				t.Fatalf("expected checked IP %q, got %q", tt.expectedIP, sessionService.checkedIP)
+			}
+		})
+	}
+}
+
+func TestUserHandlerUsesExplicitSecureCookieSetting(t *testing.T) {
+	issuedToken := &auth.IssuedToken{
+		Token:     "refresh-token",
+		ExpiresAt: time.Now().Add(time.Hour),
+		ExpiresIn: int64(time.Hour.Seconds()),
+	}
+
+	for _, secure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("secure=%t", secure), func(t *testing.T) {
+			handler := NewUserHandlerWithOptions(
+				&fakeUserService{},
+				testTokenManager(t),
+				UserHandlerOptions{SecureCookies: secure},
+			)
+			recorder := httptest.NewRecorder()
+			context, _ := gin.CreateTestContext(recorder)
+			context.Request = httptest.NewRequest(http.MethodPost, "/login", nil)
+			context.Request.Header.Set("X-Forwarded-Proto", "https")
+
+			handler.setRefreshTokenCookie(context, issuedToken)
+			cookies := recorder.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Secure != secure {
+				t.Fatalf("expected Secure=%t, got %+v", secure, cookies)
+			}
+		})
 	}
 }
 

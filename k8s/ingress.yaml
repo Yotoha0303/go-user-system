@@ -3,8 +3,14 @@ kind: Ingress
 metadata:
   name: go-user-system-ingress
   namespace: go-user-system
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - go-user-system.example.com
+      secretName: go-user-system-tls
   rules:
     - host: go-user-system.example.com
       http:

@@ -1,12 +1,13 @@
 # Kubernetes 部署
 
-清单默认部署 `v1.0.0-rc.2` 的 GHCR 固定标签，包含 MySQL、Redis、单例 migration Job、两个后端副本、两个前端副本和 Nginx Ingress。
+清单默认部署 `v1.0.0-rc.3` 的 GHCR 固定标签，包含 MySQL、Redis、单例 migration Job、两个后端副本、两个前端副本和启用 TLS 跳转的 Nginx Ingress。
 
 ## 前置条件
 
 - Kubernetes 集群和 `kubectl`。
 - 默认 StorageClass。
 - 已安装 Nginx Ingress Controller。
+- 已签发域名证书，可创建 `go-user-system-tls` TLS Secret。
 - 集群可以拉取 `ghcr.io/yotoha0303` 的公开镜像；私有包需配置 `imagePullSecrets`。
 
 ## 创建 Secret
@@ -28,7 +29,16 @@ kubectl apply -f k8s/secret.yaml
 
 ## 部署
 
-修改 `k8s/ingress.yaml` 的域名，并按需配置 TLS。然后运行：
+修改 `k8s/ingress.yaml` 的域名，并创建清单引用的 TLS Secret：
+
+```bash
+kubectl create secret tls go-user-system-tls \
+  -n go-user-system \
+  --cert=/path/to/tls.crt \
+  --key=/path/to/tls.key
+```
+
+确认 `k8s/configmap.yaml` 的 `TRUSTED_PROXIES` 只覆盖 Ingress Controller 所在网络；仓库中的私网 CIDR 是自托管示例，不应直接照搬到公网边界。然后运行：
 
 ```bash
 make k8s-deploy
@@ -41,7 +51,7 @@ make k8s-deploy
 ```bash
 make k8s-status
 kubectl get job,pod,deploy,svc,ingress -n go-user-system
-kubectl logs job/go-user-system-migrate-v1-0-0-rc-2 -n go-user-system
+kubectl logs job/go-user-system-migrate-v1-0-0-rc-3 -n go-user-system
 ```
 
 ## 初始化管理员

@@ -24,7 +24,7 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await logout(auth.accessToken);
     } catch {
       // Local session cleanup must not depend on network availability.
     } finally {

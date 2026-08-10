@@ -61,6 +61,7 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8082}:8082"
     environment:
+      APP_ENV: development
       APP_PORT: "8082"
       DB_HOST: mysql
       DB_PORT: "3306"
@@ -71,6 +72,8 @@ services:
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
       REDIS_ENABLED: "true"
       REDIS_ADDR: redis:6379
+      COOKIE_SECURE: "false"
+      TRUSTED_PROXIES: "172.30.0.0/24"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -105,3 +108,9 @@ services:
 volumes:
   mysql_data:
   redis_data:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

@@ -11,7 +11,6 @@ import (
 	"go-user-system/internal/response"
 	"go-user-system/internal/service"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -52,9 +51,18 @@ type UserHandler struct {
 	parseRefreshToken    func(tokenString string) (*auth.UserClaims, error)
 	hashToken            func(token string) string
 	accessTokenExpiresIn func() int64
+	secureCookies        bool
+}
+
+type UserHandlerOptions struct {
+	SecureCookies bool
 }
 
 func NewUserHandler(userService UserService, tokenManager *auth.TokenManager, authSessionService ...AuthSessionService) *UserHandler {
+	return NewUserHandlerWithOptions(userService, tokenManager, UserHandlerOptions{}, authSessionService...)
+}
+
+func NewUserHandlerWithOptions(userService UserService, tokenManager *auth.TokenManager, options UserHandlerOptions, authSessionService ...AuthSessionService) *UserHandler {
 	var sessionService AuthSessionService
 	if len(authSessionService) > 0 {
 		sessionService = authSessionService[0]
@@ -68,6 +76,7 @@ func NewUserHandler(userService UserService, tokenManager *auth.TokenManager, au
 		parseAccessToken:     tokenManager.ParseAccessToken,
 		parseRefreshToken:    tokenManager.ParseRefreshToken,
 		hashToken:            auth.HashToken,
+		secureCookies:        options.SecureCookies,
 		accessTokenExpiresIn: func() int64 {
 			return int64(tokenManager.AccessTokenTTL().Seconds())
 		},
@@ -121,7 +130,10 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	loginIP := directClientIP(c.Request)
+	loginIP := strings.TrimSpace(c.ClientIP())
+	if loginIP == "" {
+		loginIP = "unknown"
+	}
 	if h.authSessionService != nil {
 		retryAfter, err := h.authSessionService.CheckLoginAllowed(c.Request.Context(), req.Username, loginIP)
 		if err != nil {
@@ -197,7 +209,7 @@ func (h *UserHandler) LoginHandler(c *gin.Context) {
 		}
 	}
 
-	setRefreshTokenCookie(c, refreshToken)
+	h.setRefreshTokenCookie(c, refreshToken)
 	response.Success(c, response.TokenAndUserInfoResponse{
 		AccessToken:           token,
 		AccessTokenExpiresIn:  h.accessTokenExpiresIn(),
@@ -232,14 +244,14 @@ func (h *UserHandler) RefreshTokenHandler(c *gin.Context) {
 	}
 	refreshTokenValue := requestRefreshToken(c, req.RefreshToken)
 	if refreshTokenValue == "" {
-		clearRefreshTokenCookie(c)
+		h.clearRefreshTokenCookie(c)
 		response.Fail(c, http.StatusUnauthorized, response.CodeRefreshTokenInvalid, "refresh token is missing")
 		return
 	}
 
 	claims, err := h.parseRefreshToken(refreshTokenValue)
 	if err != nil {
-		clearRefreshTokenCookie(c)
+		h.clearRefreshTokenCookie(c)
 		handleRefreshTokenParseError(c, err)
 		return
 	}
@@ -302,7 +314,7 @@ func (h *UserHandler) RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	setRefreshTokenCookie(c, nextRefreshToken)
+	h.setRefreshTokenCookie(c, nextRefreshToken)
 	response.Success(c, response.TokenPairResponse{
 		AccessToken:           accessToken,
 		AccessTokenExpiresIn:  h.accessTokenExpiresIn(),
@@ -329,14 +341,15 @@ func (h *UserHandler) LogoutHandler(c *gin.Context) {
 		return
 	}
 	refreshTokenValue := requestRefreshToken(c, req.RefreshToken)
-	clearRefreshTokenCookie(c)
 	if refreshTokenValue == "" {
+		h.clearRefreshTokenCookie(c)
 		response.Fail(c, http.StatusUnauthorized, response.CodeRefreshTokenInvalid, "refresh token is missing")
 		return
 	}
 
 	claims, err := h.parseRefreshToken(refreshTokenValue)
 	if err != nil {
+		h.clearRefreshTokenCookie(c)
 		handleRefreshTokenParseError(c, err)
 		return
 	}
@@ -376,6 +389,7 @@ func (h *UserHandler) LogoutHandler(c *gin.Context) {
 		return
 	}
 
+	h.clearRefreshTokenCookie(c)
 	response.Success(c, nil)
 }
 
@@ -522,7 +536,7 @@ func requestRefreshToken(c *gin.Context, bodyToken string) string {
 	return strings.TrimSpace(token)
 }
 
-func setRefreshTokenCookie(c *gin.Context, issuedToken *auth.IssuedToken) {
+func (h *UserHandler) setRefreshTokenCookie(c *gin.Context, issuedToken *auth.IssuedToken) {
 	if issuedToken == nil {
 		return
 	}
@@ -534,12 +548,12 @@ func setRefreshTokenCookie(c *gin.Context, issuedToken *auth.IssuedToken) {
 		Expires:  issuedToken.ExpiresAt,
 		MaxAge:   int(issuedToken.ExpiresIn),
 		HttpOnly: true,
-		Secure:   requestIsHTTPS(c.Request),
+		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func clearRefreshTokenCookie(c *gin.Context) {
+func (h *UserHandler) clearRefreshTokenCookie(c *gin.Context) {
 	//nolint:gosec
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     refreshTokenCookieName,
@@ -548,34 +562,9 @@ func clearRefreshTokenCookie(c *gin.Context) {
 		Expires:  time.Unix(1, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   requestIsHTTPS(c.Request),
+		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
-}
-
-func requestIsHTTPS(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	if req.TLS != nil {
-		return true
-	}
-	forwardedProto := strings.TrimSpace(strings.Split(req.Header.Get("X-Forwarded-Proto"), ",")[0])
-	return strings.EqualFold(forwardedProto, "https")
-}
-
-func directClientIP(req *http.Request) string {
-	if req == nil {
-		return "unknown"
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr))
-	if err == nil && host != "" {
-		return host
-	}
-	if remoteAddr := strings.TrimSpace(req.RemoteAddr); remoteAddr != "" {
-		return remoteAddr
-	}
-	return "unknown"
 }
 
 func respondLoginRateLimited(c *gin.Context, retryAfter time.Duration) bool {
@@ -678,6 +667,6 @@ func (h *UserHandler) UpdateUserPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	clearRefreshTokenCookie(c)
+	h.clearRefreshTokenCookie(c)
 	response.Success(c, nil)
 }

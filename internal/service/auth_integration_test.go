@@ -60,7 +60,7 @@ func createAuthIntegrationUser(t *testing.T, db *gorm.DB, password string) *mode
 
 func TestAuthServiceIntegrationConcurrentRefreshAllowsOneSuccessAndRevokesFamilyOnReplay(t *testing.T) {
 	db := prepareAuthIntegrationDB(t)
-	user := createAuthIntegrationUser(t, db, "password123")
+	user := createAuthIntegrationUser(t, db, "password1234")
 	now := time.Now().UTC()
 	current := &model.RefreshToken{
 		UserID:    user.ID,

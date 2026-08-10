@@ -9,7 +9,7 @@ import (
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
 	"go-user-system/internal/request"
-	"go-user-system/internal/service"
+	"go-user-system/router"
 	"log/slog"
 	"net/http"
 	"os"
@@ -132,7 +132,7 @@ func baseRunDeps(t *testing.T) appDeps {
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return &auth.TokenManager{}, nil
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler {
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtime router.AuthRuntime) http.Handler {
 			return http.NewServeMux()
 		},
 		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
@@ -159,7 +159,7 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.newAuthStateStore == nil {
 		t.Fatal("expected authentication state store factory")
 	}
-	if deps.setupRouter(nil, nil, &auth.TokenManager{}, authstate.NewMemoryStore(), service.LoginRateLimit{}, true) == nil {
+	if deps.setupRouter(nil, nil, &auth.TokenManager{}, router.AuthRuntime{}) == nil {
 		t.Fatal("expected default router")
 	}
 	if deps.bootstrapAdmin == nil || deps.getenv == nil {

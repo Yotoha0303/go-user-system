@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go-user-system/internal/apperror"
 	"go-user-system/internal/model"
@@ -16,6 +17,13 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	MinPasswordCharacters = 12
+	MaxPasswordBytes      = 72
+)
+
+var dummyPasswordHash = []byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+
 func (s *UserService) ensureDB() error {
 	if s == nil || s.db == nil {
 		return ErrDatabaseNotInitialized
@@ -24,7 +32,7 @@ func (s *UserService) ensureDB() error {
 }
 
 func validatePassword(password string) error {
-	if len(password) < 6 || len(password) > 54 {
+	if utf8.RuneCountInString(password) < MinPasswordCharacters || len([]byte(password)) > MaxPasswordBytes {
 		return ErrPasswordTooShortOrTooLong
 	}
 	return nil
@@ -114,6 +122,7 @@ func (s *UserService) Login(ctx context.Context, req request.LoginRequest) (*mod
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(req.Password))
 			return nil, ErrInvalidCredentials
 		}
 		return nil, apperror.Wrap(
@@ -124,11 +133,11 @@ func (s *UserService) Login(ctx context.Context, req request.LoginRequest) (*mod
 		)
 	}
 
-	if user.Status != model.UserStatusActive {
-		return nil, ErrUserDisabled
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		return nil, ErrInvalidCredentials
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if user.Status != model.UserStatusActive {
 		return nil, ErrInvalidCredentials
 	}
 

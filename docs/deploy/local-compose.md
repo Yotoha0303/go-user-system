@@ -27,9 +27,13 @@ DB_ROOT_PASSWORD=replace_with_a_strong_root_password
 DB_PASSWORD=replace_with_a_different_app_password
 JWT_SECRET=replace_with_a_32_plus_chars_random_secret
 REGISTRATION_ENABLED=true
+APP_ENV=development
+COOKIE_SECURE=false
 FRONTEND_PORT=8080
 BACKEND_PORT=8082
 ```
+
+本地 Compose 只监听 HTTP，因此保持 `COOKIE_SECURE=false`；Compose 仍强制使用 Redis，并将固定容器网段配置为可信代理。通过 HTTPS 公开部署时必须改用 `APP_ENV=production`、`COOKIE_SECURE=true`，并把 `TRUSTED_PROXIES` 收窄到真实入口代理 CIDR。
 
 `.env` 已被 Git 忽略，不得提交真实凭据。
 
