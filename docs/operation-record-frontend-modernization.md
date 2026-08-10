@@ -9,9 +9,20 @@
 | 实施分支 | `feat/frontend-modernization` |
 | 实施提交 | `5fc6bf89f465a498f67d2a1ff551804aa5ca4cd4` (`feat: modernize frontend workspace`) |
 | 合并 PR | [#13](https://github.com/Yotoha0303/go-user-system/pull/13) |
+| 合并提交 | `eea18d89da6a8687dfdf1ea81fb9eb426e7e8125` |
 | 实施日期 | `2026-08-10` |
 
 本轮只调整 React 前端的视觉体系、信息层级和响应式交互，不迁移框架，不改变后端 API、认证状态模型、RBAC 权限码或既有表单校验契约。
+
+实施提交：
+
+| 提交 | 内容 |
+| --- | --- |
+| `5fc6bf8` | 响应式工作台、共享视觉组件、页面重构、截图和初始测试 |
+| `4a34517` | 前端现代化操作记录 |
+| `912b1d4` | 回填 PR 链接 |
+| `97d69ce` | 关闭抽屉的可访问性隔离和矮屏滚动 |
+| `3633906` | 将 E2E 用户名断言限定到资料业务区域 |
 
 ## 问题、原因、修改建议与实现
 
@@ -70,7 +81,7 @@ npm --prefix frontend run check
 - ESLint 通过。
 - Vitest 7 个测试文件、11 个测试全部通过。
 - TypeScript 编译和 Vite 生产构建通过。
-- 生产 JavaScript 为 373.19 KB，gzip 后 122.14 KB；CSS 为 19.44 KB，gzip 后 4.61 KB。
+- 生产 JavaScript 为 373.29 KB，gzip 后 122.18 KB；CSS 为 19.61 KB，gzip 后 4.66 KB。
 
 浏览器视觉检查：
 
@@ -90,7 +101,9 @@ npm --prefix frontend run check
 - Playwright Desktop Chrome 与 Pixel 7 项目重新执行，注册、登录、双标签页恢复、资料页、登出和 Access 吊销 2 项全部通过。
 - 验收后删除隔离容器、网络和数据卷。
 - 可访问性修复后的远程 E2E 首次失败：全页用户名定位的第一个匹配变为关闭抽屉中的隐藏文本。测试改为限定 `Account details` 区域，避免把隐藏导航内容误判为资料正文。
-- 最终远程 CI 结果将在 PR 合并后由 GitHub Actions 留存。
+- PR #13 最新 [CI run](https://github.com/Yotoha0303/go-user-system/actions/runs/31405846046) 中，后端、前端、部署清单和浏览器 E2E 全部通过；E2E 在 Desktop Chrome 与 Pixel 7 上为 2/2 通过。
+- 最新 [CodeQL run](https://github.com/Yotoha0303/go-user-system/actions/runs/31405846939) 的 Go 与 JavaScript/TypeScript 分析全部通过。
+- 两条 P2 可访问性审查意见均已修复并解决；PR 在 6 项必需状态检查和会话解决规则满足后，以普通 merge commit 合并，没有管理员绕过。
 
 ## 边界与后续
 
