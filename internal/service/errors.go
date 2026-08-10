@@ -20,7 +20,7 @@ var (
 	ErrPasswordTooShortOrTooLong = apperror.New(
 		http.StatusBadRequest,
 		response.CodeInvalidParams,
-		"password too short or too long",
+		"password must contain at least 12 characters and no more than 72 UTF-8 bytes",
 	)
 
 	ErrUsernameAlreadyExists = apperror.New(

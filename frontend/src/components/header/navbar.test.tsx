@@ -37,6 +37,7 @@ describe("Navbar", () => {
       await user.click(screen.getByRole("button", { name: "Sign out" }));
     });
     await screen.findByText("Login destination");
+    await waitFor(() => expect(logout).toHaveBeenCalledWith("access-token"));
     await waitFor(() => expect(store.getState().auth.status).toBe("anonymous"));
   });
 });

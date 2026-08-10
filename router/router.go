@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
 	"go-user-system/internal/handler"
@@ -17,10 +18,19 @@ type AuthRuntime struct {
 	StateStore          authstate.Store
 	LoginRateLimit      service.LoginRateLimit
 	RegistrationEnabled *bool
+	SecureCookies       bool
+	TrustedProxies      []string
 }
 
 func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) *gin.Engine {
 	r := gin.New()
+	runtime := AuthRuntime{}
+	if len(runtimes) > 0 {
+		runtime = runtimes[0]
+	}
+	if err := r.SetTrustedProxies(runtime.TrustedProxies); err != nil {
+		panic(fmt.Sprintf("configure trusted proxies: %v", err))
+	}
 
 	r.Use(
 		middleware.RequestID(),
@@ -31,20 +41,22 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 	userService := service.NewUserService(db)
 	authService := service.NewAuthService(db)
 	var healthCheckers []handler.HealthChecker
-	if len(runtimes) > 0 && runtimes[0].StateStore != nil {
-		authService = service.NewAuthServiceWithState(db, runtimes[0].StateStore, runtimes[0].LoginRateLimit)
-		healthCheckers = append(healthCheckers, runtimes[0].StateStore)
+	if runtime.StateStore != nil {
+		authService = service.NewAuthServiceWithState(db, runtime.StateStore, runtime.LoginRateLimit)
+		healthCheckers = append(healthCheckers, runtime.StateStore)
 	}
 	rbacService := service.NewRBACService(db)
-	userHandler := handler.NewUserHandler(userService, tokenManager, authService)
+	userHandler := handler.NewUserHandlerWithOptions(userService, tokenManager, handler.UserHandlerOptions{
+		SecureCookies: runtime.SecureCookies,
+	}, authService)
 	rbacHandler := handler.NewRBACHandler(rbacService)
 	healthHandler := handler.NewHealthHandler(db, healthCheckers...)
 
 	registerHealthRoutes(r, healthHandler)
 	registerSwaggerRoutes(r)
 	registrationEnabled := true
-	if len(runtimes) > 0 && runtimes[0].RegistrationEnabled != nil {
-		registrationEnabled = *runtimes[0].RegistrationEnabled
+	if runtime.RegistrationEnabled != nil {
+		registrationEnabled = *runtime.RegistrationEnabled
 	}
 	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, authService, rbacService, registrationEnabled)
 

@@ -1,6 +1,6 @@
 # 生产部署检查清单
 
-`v1.0.0-rc.2` 进入生产前应逐项验证；无法满足的项目需要记录风险、负责人和补救期限。
+`v1.0.0-rc.3` 进入生产前应逐项验证；无法满足的项目需要记录风险、负责人和补救期限。
 
 ## 密钥与权限
 
@@ -31,7 +31,10 @@
 
 ## 网络与运行时
 
+- [ ] `APP_ENV=production`，应用在 Redis 或 Secure Cookie 配置缺失时拒绝启动。
 - [ ] 外部入口启用 TLS，代理传递正确的 `X-Forwarded-Proto`。
+- [ ] `COOKIE_SECURE=true`，且登录响应中的 Refresh Cookie 实际包含 `Secure`。
+- [ ] `TRUSTED_PROXIES` 只包含真实入口代理的 IP/CIDR；伪造 XFF 不会改变登录限流 IP。
 - [ ] MySQL 和 Redis 不暴露公网。
 - [ ] 容器使用非 root 用户、禁用提权并移除不需要的 capabilities。
 - [ ] CPU、内存、重启策略和副本数符合目标负载。
@@ -46,6 +49,8 @@
 - [ ] 改密后全部旧 Access/Refresh 失效。
 - [ ] Refresh 重放会吊销整个 Token Family。
 - [ ] 登录限流返回 429 和正确的 `Retry-After`。
+- [ ] 两个标签页并发触发 Refresh 时不会误报重放或吊销 Token Family。
+- [ ] 注册和改密拒绝少于 12 个字符或超过 72 个 UTF-8 字节的密码。
 - [ ] 普通注册用户只有 `user` 角色，无法访问管理员接口。
 
 ## 可观测与验收

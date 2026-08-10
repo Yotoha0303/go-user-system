@@ -37,7 +37,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 STOPSIGNAL SIGTERM
 
 LABEL maintainer="go-user-system-v1.0" \
-  version="1.0.0-rc.2" \
+  version="1.0.0-rc.3" \
   description="Go user authentication and RBAC backend" \
   org.opencontainers.image.source="https://github.com/Yotoha0303/go-user-system"
 

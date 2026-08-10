@@ -2,7 +2,7 @@ package request
 
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Password string `json:"password" binding:"required,min=12,max=72" minLength:"12" maxLength:"72"`
 }
 
 type LoginRequest struct {
@@ -16,7 +16,7 @@ type UpdateProfileRequest struct {
 
 type UpdatePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=12,max=72" minLength:"12" maxLength:"72"`
 }
 
 type RefreshTokenRequest struct {

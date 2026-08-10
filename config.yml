@@ -1,3 +1,4 @@
+environment: development
 server:
   port: 8082
 mysql:
@@ -23,6 +24,8 @@ jwt:
   accessTokenExpireMinutes: 15
   refreshTokenExpireHours: 168
 auth:
+  refreshCookie:
+    secure: false
   registration:
     enabled: true
   loginRateLimit:
@@ -30,6 +33,7 @@ auth:
     ipLimit: 20
     window: 15m
 http:
+  trustedProxies: []
   server:
     readTimeout: 5s
     writeTimeout: 10s

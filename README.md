@@ -6,7 +6,7 @@
 
 一个可自托管的全栈用户认证与 RBAC 项目。后端使用 Go、Gin、GORM、MySQL 和 Redis，前端使用 React、TypeScript 和 Vite。项目提供可重复的数据库迁移、完整容器栈、Kubernetes 清单、自动化测试和发布流水线。
 
-当前公开交付版本为 `v1.0.0-rc.2`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
+当前公开交付版本为 `v1.0.0-rc.3`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
 
 ![Go User System sign-in screen](docs/assets/application-home.png)
 
@@ -15,7 +15,9 @@
 - 用户注册、登录、资料查询、昵称修改、密码修改和登出。
 - JWT Access/Refresh 双 Token；Refresh Token 使用 HttpOnly Cookie、哈希存储和 Rotation。
 - Token Family 重放检测、用户 `auth_version`、改密后全会话失效。
+- 浏览器登出同步吊销当前 Access JTI；Web Locks 串行化多标签页 Refresh Rotation。
 - Redis JTI 吊销和账号/IP 双维度登录失败限流，多副本环境下 fail-closed。
+- 显式 Secure Cookie、可信代理 CIDR 和生产环境启动校验。
 - RBAC 角色、权限、用户角色和角色权限模型，以及接口级权限中间件。
 - 显式一次性管理员初始化，普通注册不再获得管理员权限。
 - 可关闭的公开注册入口：`REGISTRATION_ENABLED=false`。
@@ -119,14 +121,17 @@ docs/                   API、部署、迭代计划和操作记录
 | `DB_ROOT_PASSWORD` | 仅用于初始化 MySQL root | 必填 |
 | `DB_PASSWORD` | 应用数据库账号密码 | 必填 |
 | `JWT_SECRET` | HS256 密钥，至少 32 字符 | 必填 |
+| `APP_ENV` | `development`、`test` 或 `production`；生产模式强制安全依赖 | `development` |
 | `REGISTRATION_ENABLED` | 是否注册 `POST /api/v1/auth/register` | `true` |
 | `REDIS_ENABLED` | 是否启用共享认证状态 | Compose 强制为 `true` |
 | `REDIS_ADDR` | Redis 地址 | Compose 使用 `redis:6379` |
+| `COOKIE_SECURE` | Refresh Cookie 是否强制添加 `Secure`；生产模式必须为 `true` | `false` |
+| `TRUSTED_PROXIES` | 允许提供真实客户端 IP 的代理 IP/CIDR，逗号分隔 | Compose 网络 CIDR |
 | `BOOTSTRAP_ADMIN_USERNAME` | 一次性管理员用户名 | 命令执行时必填 |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 一次性管理员密码 | 命令执行时必填 |
 | `FRONTEND_PORT` / `BACKEND_PORT` | Compose 宿主机端口 | `8080` / `8082` |
 
-所有支持的数据库、JWT、Redis 和 HTTP 参数见 `.env.example`、`config.yml` 与 `config/config.go`。
+所有支持的数据库、JWT、Redis 和 HTTP 参数见 `.env.example`、`config.yml` 与 `config/config.go`。密码策略为至少 12 个字符、最多 72 个 UTF-8 字节；登录对不存在用户、错误密码和禁用用户统一返回凭据错误。
 
 ## 本地开发
 

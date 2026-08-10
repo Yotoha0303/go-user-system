@@ -20,7 +20,13 @@ export const register = async (credentials: Credentials): Promise<void> => {
   unwrap(response.data);
 };
 
-export const logout = async (): Promise<void> => {
-  const response = await publicApi.post<ApiResponse<null>>("/api/v1/auth/logout");
+export const logout = async (accessToken?: string | null): Promise<void> => {
+  const response = await publicApi.post<ApiResponse<null>>(
+    "/api/v1/auth/logout",
+    undefined,
+    accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : undefined
+  );
   unwrap(response.data);
 };

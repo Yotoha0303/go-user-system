@@ -83,6 +83,24 @@ func TestLoadAppliesRedisEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadAppliesProductionSecurityEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("REDIS_ENABLED", "true")
+	t.Setenv("COOKIE_SECURE", "true")
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8, 192.0.2.10")
+
+	cfg, err := Load(writeTempConfig(t, validConfigYAML()))
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+	if cfg.Environment != "production" || !cfg.Auth.RefreshCookie.Secure {
+		t.Fatalf("unexpected production security config: %+v", cfg)
+	}
+	if len(cfg.HttpServer.TrustedProxies) != 2 {
+		t.Fatalf("expected two trusted proxies, got %v", cfg.HttpServer.TrustedProxies)
+	}
+}
+
 func TestLoadRejectsInvalidRedisEnabledEnvironment(t *testing.T) {
 	t.Setenv("REDIS_ENABLED", "not-a-bool")
 	path := writeTempConfig(t, validConfigYAML())
@@ -164,7 +182,8 @@ func TestLoadReadsConfigFile(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		Server: ServerConfig{Port: 8082},
+		Environment: "development",
+		Server:      ServerConfig{Port: 8082},
 		MySQL: MySQLConfig{
 			Host:            "127.0.0.1",
 			Port:            "3306",
@@ -184,6 +203,7 @@ func validConfig() Config {
 			Algorithm:                "HS256",
 		},
 		Auth: AuthConfig{
+			RefreshCookie: RefreshCookieConfig{Secure: false},
 			LoginRateLimit: LoginRateLimitConfig{
 				AccountLimit: 5,
 				IPLimit:      20,
@@ -372,11 +392,62 @@ func TestValidateConfig(t *testing.T) {
 
 func TestValidateRejectsEnabledRedisWithoutAddress(t *testing.T) {
 	cfg := validConfig()
-	cfg.Redis.Enabled = true
+	cfg.Redis = RedisConfig{
+		Enabled:      true,
+		Address:      "127.0.0.1:6379",
+		DialTimeout:  time.Second,
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
+		PingTimeout:  time.Second,
+	}
 	cfg.Redis.Address = ""
 
 	if err := cfg.Validate(); !errors.Is(err, ErrRedisAddressEmpty) {
 		t.Fatalf("expected ErrRedisAddressEmpty, got %v", err)
+	}
+}
+
+func TestValidateRejectsUnsupportedJWTAlgorithm(t *testing.T) {
+	cfg := validConfig()
+	cfg.JWT.Algorithm = "RS256"
+
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "supported: HS256") {
+		t.Fatalf("expected HS256-only validation error, got %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidTrustedProxy(t *testing.T) {
+	cfg := validConfig()
+	cfg.HttpServer.TrustedProxies = []string{"not-a-network"}
+
+	if err := cfg.Validate(); !errors.Is(err, ErrTrustedProxyInvalid) {
+		t.Fatalf("expected ErrTrustedProxyInvalid, got %v", err)
+	}
+}
+
+func TestValidateRequiresRedisAndSecureCookiesInProduction(t *testing.T) {
+	cfg := validConfig()
+	cfg.Environment = "production"
+
+	if err := cfg.Validate(); !errors.Is(err, ErrProductionRedisRequired) {
+		t.Fatalf("expected ErrProductionRedisRequired, got %v", err)
+	}
+
+	cfg.Redis = RedisConfig{
+		Enabled:      true,
+		Address:      "127.0.0.1:6379",
+		DialTimeout:  time.Second,
+		ReadTimeout:  time.Second,
+		WriteTimeout: time.Second,
+		PingTimeout:  time.Second,
+	}
+	if err := cfg.Validate(); !errors.Is(err, ErrProductionSecureCookieRequired) {
+		t.Fatalf("expected ErrProductionSecureCookieRequired, got %v", err)
+	}
+
+	cfg.Auth.RefreshCookie.Secure = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected production config to validate, got %v", err)
 	}
 }
 

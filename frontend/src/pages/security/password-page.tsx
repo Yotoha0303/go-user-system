@@ -25,8 +25,8 @@ const schema = yup
     oldPassword: yup.string().required("Current password is required"),
     newPassword: yup
       .string()
-      .min(6, "Password must be at least 6 characters")
-      .max(54, "Password must be at most 54 characters")
+      .min(12, "Password must be at least 12 characters")
+      .max(72, "Password must be at most 72 characters")
       .notOneOf([yup.ref("oldPassword")], "New password must be different")
       .required("New password is required"),
     confirmPassword: yup

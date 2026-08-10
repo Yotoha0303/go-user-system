@@ -6,6 +6,7 @@ metadata:
   namespace: go-user-system
 data:
   config.yml: |
+    environment: production
     server:
       port: 8082
     mysql:
@@ -31,6 +32,8 @@ data:
       accessTokenExpireMinutes: 15
       refreshTokenExpireHours: 168
     auth:
+      refreshCookie:
+        secure: true
       registration:
         enabled: true
       loginRateLimit:
@@ -38,6 +41,10 @@ data:
         ipLimit: 20
         window: 15m
     http:
+      trustedProxies:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
       server:
         readTimeout: 5s
         writeTimeout: 10s
@@ -52,3 +59,6 @@ data:
   REGISTRATION_ENABLED: "true"
   REDIS_ENABLED: "true"
   REDIS_ADDR: "go-user-system-redis:6379"
+  APP_ENV: "production"
+  COOKIE_SECURE: "true"
+  TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

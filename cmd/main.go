@@ -35,7 +35,7 @@ type appDeps struct {
 	initDB            func(cfg *config.Config) (*gorm.DB, error)
 	newAuthStateStore func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error)
 	newTokenManager   func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
-	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler
+	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtime router.AuthRuntime) http.Handler
 	bootstrapAdmin    func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error
 	getenv            func(key string) string
 	newServer         func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
@@ -61,12 +61,8 @@ func defaultAppDeps() appDeps {
 		newTokenManager: func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error) {
 			return auth.NewTokenManagerWithTTL(secret, issuer, accessTTL, refreshTTL)
 		},
-		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, stateStore authstate.Store, loginRateLimit service.LoginRateLimit, registrationEnabled bool) http.Handler {
-			return router.SetupRouter(db, logger, tokenManager, router.AuthRuntime{
-				StateStore:          stateStore,
-				LoginRateLimit:      loginRateLimit,
-				RegistrationEnabled: &registrationEnabled,
-			})
+		setupRouter: func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtime router.AuthRuntime) http.Handler {
+			return router.SetupRouter(db, logger, tokenManager, runtime)
 		},
 		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
 			return service.NewUserService(db).BootstrapAdmin(ctx, req)
@@ -208,11 +204,18 @@ func run(deps appDeps) error {
 		}
 	}()
 
-	r := deps.setupRouter(db, slog, tokenManager, authStateStore, service.LoginRateLimit{
-		AccountLimit: cfg.Auth.LoginRateLimit.AccountLimit,
-		IPLimit:      cfg.Auth.LoginRateLimit.IPLimit,
-		Window:       cfg.Auth.LoginRateLimit.Window,
-	}, cfg.Auth.RegistrationEnabled())
+	registrationEnabled := cfg.Auth.RegistrationEnabled()
+	r := deps.setupRouter(db, slog, tokenManager, router.AuthRuntime{
+		StateStore: authStateStore,
+		LoginRateLimit: service.LoginRateLimit{
+			AccountLimit: cfg.Auth.LoginRateLimit.AccountLimit,
+			IPLimit:      cfg.Auth.LoginRateLimit.IPLimit,
+			Window:       cfg.Auth.LoginRateLimit.Window,
+		},
+		RegistrationEnabled: &registrationEnabled,
+		SecureCookies:       cfg.Auth.RefreshCookie.Secure,
+		TrustedProxies:      cfg.HttpServer.TrustedProxies,
+	})
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 

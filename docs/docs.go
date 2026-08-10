@@ -782,7 +782,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "password": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 12
                 },
                 "username": {
                     "type": "string"
@@ -797,7 +799,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "new_password": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 12
                 },
                 "old_password": {
                     "type": "string"

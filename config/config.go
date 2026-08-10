@@ -3,10 +3,12 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -14,12 +16,13 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig `yaml:"server"`
-	MySQL      MySQLConfig  `yaml:"mysql"`
-	Redis      RedisConfig  `yaml:"redis"`
-	JWT        JWTConfig    `yaml:"jwt"`
-	Auth       AuthConfig   `yaml:"auth"`
-	HttpServer HttpServer   `yaml:"http"`
+	Environment string       `yaml:"environment"`
+	Server      ServerConfig `yaml:"server"`
+	MySQL       MySQLConfig  `yaml:"mysql"`
+	Redis       RedisConfig  `yaml:"redis"`
+	JWT         JWTConfig    `yaml:"jwt"`
+	Auth        AuthConfig   `yaml:"auth"`
+	HttpServer  HttpServer   `yaml:"http"`
 }
 
 type ServerConfig struct {
@@ -53,6 +56,11 @@ type RedisConfig struct {
 type AuthConfig struct {
 	Registration   RegistrationConfig   `yaml:"registration"`
 	LoginRateLimit LoginRateLimitConfig `yaml:"loginRateLimit"`
+	RefreshCookie  RefreshCookieConfig  `yaml:"refreshCookie"`
+}
+
+type RefreshCookieConfig struct {
+	Secure bool `yaml:"secure"`
 }
 
 type RegistrationConfig struct {
@@ -78,7 +86,8 @@ type JWTConfig struct {
 }
 
 type HttpServer struct {
-	Server HttpServerConfig `yaml:"server"`
+	Server         HttpServerConfig `yaml:"server"`
+	TrustedProxies []string         `yaml:"trustedProxies"`
 }
 
 type HttpServerConfig struct {
@@ -114,6 +123,10 @@ var (
 	ErrRedisDBInvalid                     = errors.New("redis db is invalid")
 	ErrRedisTimeoutInvalid                = errors.New("redis timeout is invalid")
 	ErrLoginRateLimitInvalid              = errors.New("login rate limit is invalid")
+	ErrEnvironmentInvalid                 = errors.New("application environment is invalid")
+	ErrTrustedProxyInvalid                = errors.New("trusted proxy must be an IP address or CIDR")
+	ErrProductionRedisRequired            = errors.New("production environment requires Redis authentication state")
+	ErrProductionSecureCookieRequired     = errors.New("production environment requires secure refresh cookies")
 )
 
 func (c Config) Validate() error {
@@ -122,6 +135,12 @@ func (c Config) Validate() error {
 	jwt := c.JWT
 	http := c.HttpServer.Server
 	loginRateLimit := c.Auth.LoginRateLimit
+
+	switch c.Environment {
+	case "development", "test", "production":
+	default:
+		return fmt.Errorf("%w: %q", ErrEnvironmentInvalid, c.Environment)
+	}
 
 	if server.Port <= 0 {
 		return ErrInvalidServerPort
@@ -139,8 +158,8 @@ func (c Config) Validate() error {
 		return ErrInvalidExpireHours
 	}
 
-	if jwt.Algorithm != "HS256" && jwt.Algorithm != "RS256" {
-		return fmt.Errorf("invalid JWT algorithm: %s (supported: HS256, RS256)", jwt.Algorithm)
+	if jwt.Algorithm != "HS256" {
+		return fmt.Errorf("invalid JWT algorithm: %s (supported: HS256)", jwt.Algorithm)
 	}
 
 	if len(jwt.Secret) < 32 {
@@ -222,6 +241,24 @@ func (c Config) Validate() error {
 
 	if loginRateLimit.AccountLimit <= 0 || loginRateLimit.IPLimit <= 0 || loginRateLimit.Window <= 0 {
 		return ErrLoginRateLimitInvalid
+	}
+
+	for _, trustedProxy := range c.HttpServer.TrustedProxies {
+		if net.ParseIP(trustedProxy) != nil {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(trustedProxy); err != nil {
+			return fmt.Errorf("%w: %q", ErrTrustedProxyInvalid, trustedProxy)
+		}
+	}
+
+	if c.Environment == "production" {
+		if !c.Redis.Enabled {
+			return ErrProductionRedisRequired
+		}
+		if !c.Auth.RefreshCookie.Secure {
+			return ErrProductionSecureCookieRequired
+		}
 	}
 
 	return nil
@@ -350,6 +387,10 @@ func findFileUpwardFrom(startDir string, name string) (string, bool) {
 }
 
 func applyEnvOverrides(cfg *Config) error {
+	if v := os.Getenv("APP_ENV"); v != "" {
+		cfg.Environment = strings.ToLower(strings.TrimSpace(v))
+	}
+
 	if v := os.Getenv("APP_PORT"); v != "" {
 		port, err := strconv.Atoi(v)
 		if err != nil {
@@ -427,6 +468,16 @@ func applyEnvOverrides(cfg *Config) error {
 		}
 		cfg.Auth.Registration.Enabled = &enabled
 	}
+	if v := os.Getenv("COOKIE_SECURE"); v != "" {
+		secure, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid COOKIE_SECURE: %w", err)
+		}
+		cfg.Auth.RefreshCookie.Secure = secure
+	}
+	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
+		cfg.HttpServer.TrustedProxies = splitCommaSeparated(v)
+	}
 	return nil
 }
 
@@ -435,6 +486,12 @@ func applyDefaults(cfg *Config) {
 	jwt := &cfg.JWT
 	redis := &cfg.Redis
 	loginRateLimit := &cfg.Auth.LoginRateLimit
+
+	if strings.TrimSpace(cfg.Environment) == "" {
+		cfg.Environment = "development"
+	} else {
+		cfg.Environment = strings.ToLower(strings.TrimSpace(cfg.Environment))
+	}
 
 	if jwt.AccessTokenExpireMinutes == 0 && jwt.ExpireHours > 0 {
 		jwt.AccessTokenExpireMinutes = jwt.ExpireHours * 60
@@ -487,4 +544,15 @@ func applyDefaults(cfg *Config) {
 	if loginRateLimit.Window == 0 {
 		loginRateLimit.Window = 15 * time.Minute
 	}
+}
+
+func splitCommaSeparated(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	return values
 }

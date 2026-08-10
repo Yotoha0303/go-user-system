@@ -14,7 +14,7 @@ func TestBootstrapAdminValidatesCredentials(t *testing.T) {
 
 	if err := userService.BootstrapAdmin(context.Background(), request.RegisterRequest{
 		Username: "ab",
-		Password: "password123",
+		Password: "password1234",
 	}); !errors.Is(err, ErrUsernameTooShort) {
 		t.Fatalf("expected ErrUsernameTooShort, got %v", err)
 	}
@@ -29,7 +29,7 @@ func TestBootstrapAdminValidatesCredentials(t *testing.T) {
 func TestBootstrapAdminRequiresDatabase(t *testing.T) {
 	err := NewUserService(nil).BootstrapAdmin(context.Background(), request.RegisterRequest{
 		Username: "admin",
-		Password: "password123",
+		Password: "password1234",
 	})
 	if !errors.Is(err, ErrDatabaseNotInitialized) {
 		t.Fatalf("expected ErrDatabaseNotInitialized, got %v", err)
@@ -43,7 +43,7 @@ func TestBootstrapAdminIntegrationCreatesOnlyAdministrator(t *testing.T) {
 
 	if err := userService.BootstrapAdmin(ctx, request.RegisterRequest{
 		Username: "bootstrap_admin",
-		Password: "password123",
+		Password: "password1234",
 	}); err != nil {
 		t.Fatalf("bootstrap administrator failed: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestBootstrapAdminIntegrationCreatesOnlyAdministrator(t *testing.T) {
 
 	err := userService.BootstrapAdmin(ctx, request.RegisterRequest{
 		Username: "second_admin",
-		Password: "password123",
+		Password: "password1234",
 	})
 	if !errors.Is(err, ErrAdminAlreadyBootstrapped) {
 		t.Fatalf("expected ErrAdminAlreadyBootstrapped, got %v", err)
