@@ -8,7 +8,7 @@
 | 基线提交 | `c8dc8ea3db215b11fad26e37db39d9dbcf2d321a` |
 | 实施分支 | `feat/frontend-modernization` |
 | 实施提交 | `5fc6bf89f465a498f67d2a1ff551804aa5ca4cd4` (`feat: modernize frontend workspace`) |
-| 合并 PR | 待分支推送后回填 |
+| 合并 PR | [#13](https://github.com/Yotoha0303/go-user-system/pull/13) |
 | 实施日期 | `2026-08-10` |
 
 本轮只调整 React 前端的视觉体系、信息层级和响应式交互，不迁移框架，不改变后端 API、认证状态模型、RBAC 权限码或既有表单校验契约。
