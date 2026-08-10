@@ -7,6 +7,7 @@ import {
   sessionRestored,
 } from "../../app/authSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import BrandMark from "../brand/brand-mark";
 import Spinner from "../elements/spinner";
 
 const AuthBootstrap = ({ children }: { children: ReactNode }) => {
@@ -45,10 +46,13 @@ const AuthBootstrap = ({ children }: { children: ReactNode }) => {
 
   if (status === "initializing") {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-50">
-        <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
-          <Spinner size="sm" />
-          Restoring session
+      <div className="grid min-h-screen place-items-center bg-[#f4f7f6] px-4">
+        <div className="surface-shadow flex min-w-64 flex-col items-center rounded-lg border border-slate-200 bg-white px-8 py-7">
+          <BrandMark />
+          <div className="mt-5 flex items-center gap-2 text-sm font-medium text-slate-600">
+            <Spinner size="sm" />
+            Restoring session
+          </div>
         </div>
       </div>
     );

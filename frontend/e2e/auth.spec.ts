@@ -54,6 +54,13 @@ test("user can register, restore two tabs, and revoke access on sign out", async
   await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   await expect(secondTab.getByRole("heading", { name: "Profile" })).toBeVisible();
 
+  const openNavigationButton = page.getByRole("button", {
+    name: "Open navigation",
+  });
+  if (await openNavigationButton.isVisible()) {
+    await openNavigationButton.click();
+    await expect(openNavigationButton).toHaveAttribute("aria-expanded", "true");
+  }
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/auth\/login$/);
   expect(browserErrors).toEqual([]);

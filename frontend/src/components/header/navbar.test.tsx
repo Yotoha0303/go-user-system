@@ -10,6 +10,34 @@ import Navbar from "./navbar";
 vi.mock("../../api/auth.api", () => ({ logout: vi.fn() }));
 
 describe("Navbar", () => {
+  it("opens and closes the mobile navigation drawer", async () => {
+    const store = configureStore({ reducer: { auth: authReducer } });
+    store.dispatch(
+      sessionStarted({
+        accessToken: "access-token",
+        accessTokenExpiresAt: Date.now() + 10000,
+        user: { id: 1, username: "alice", nickname: "Alice", status: 1 },
+      })
+    );
+    const user = userEvent.setup();
+    render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={["/profile"]}>
+          <Navbar />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    const openButton = screen.getByRole("button", { name: "Open navigation" });
+    expect(openButton).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(openButton);
+    expect(openButton).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getAllByRole("button", { name: "Close navigation" })[0]);
+    expect(openButton).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("clears local session even when server logout fails", async () => {
     vi.mocked(logout).mockRejectedValue(new Error("network unavailable"));
     const store = configureStore({ reducer: { auth: authReducer } });

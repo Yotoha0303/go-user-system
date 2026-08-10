@@ -14,6 +14,13 @@ Go User System 的 React 前端，覆盖注册登录、会话恢复、个人资�
 | 测试 | Vitest、Testing Library、jsdom、Playwright |
 | 质量检查 | ESLint、TypeScript、Vite build |
 
+## 界面结构
+
+- 匿名页面使用完整背景视觉和聚焦的认证表单，桌面端与移动端共享同一套表单流程。
+- 登录后的工作区在桌面端使用固定侧边栏，在移动端使用可关闭的抽屉导航。
+- 资料、安全和权限页面复用统一的标题、表单、反馈和数据表格样式。
+- 认证背景资源位于 `public/images/identity-access-background.webp`。
+
 ## 本地运行
 
 前置条件：后端监听 `http://127.0.0.1:8082`，Node.js 22.22.2 或更高版本。
@@ -80,4 +87,4 @@ docker build -t go-user-system-frontend:dev .
 
 生产镜像监听 `8080`，支持 SPA fallback，并在 Compose 中把 `/api` 代理到后端。Kubernetes 入口会直接把 `/api` 路由到后端 Service。
 
-历史操作记录见 `docs/operation-record-frontend-auth-rbac.md`；全栈公开交付记录见仓库根目录的 `docs/operation-record-public-delivery.md`。
+认证与 RBAC 历史记录见 `docs/operation-record-frontend-auth-rbac.md`；本次界面改造见仓库根目录的 `docs/operation-record-frontend-modernization.md`；全栈公开交付记录见仓库根目录的 `docs/operation-record-public-delivery.md`。

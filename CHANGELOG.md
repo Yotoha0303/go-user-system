@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- Modernized the React workspace with a responsive desktop sidebar, mobile navigation drawer, denser account and RBAC views, and consistent shared controls.
+- Reworked anonymous authentication screens around an optimized identity visual while preserving the existing authentication and authorization contracts.
+- Updated desktop and mobile documentation screenshots to match the current interface.
+
+### Testing
+
+- Added mobile navigation drawer interaction coverage.
+- Verified the interface at desktop and mobile viewports with Playwright visual checks.
+
 See `ROADMAP.md` for planned work.
 
 ## [1.0.0-rc.3] - 2026-08-10
