@@ -34,7 +34,7 @@ backups/go_user_system-<UTC timestamp>.sql
 backups/go_user_system-<UTC timestamp>.sql.manifest.json
 ```
 
-Manifest 只记录来源、时间、应用提交、文件名、大小和 SHA-256，不记录数据库密码或业务行。
+Manifest 只记录来源、时间、应用提交、文件名、大小和 SHA-256，不记录数据库密码或业务行。从 Git checkout 运行时记录当前提交；发布归档或未安装 Git 的主机使用 `application_commit: unknown`，不会影响备份与恢复。
 
 ## 恢复演练
 

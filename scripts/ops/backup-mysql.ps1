@@ -72,8 +72,22 @@ try {
         throw "backup checksum mismatch between container and host"
     }
 
-    $commitOutput = & git -C $ProjectDirectory rev-parse HEAD 2>$null
-    $commit = if ($LASTEXITCODE -eq 0) { ($commitOutput | Select-Object -First 1).Trim() } else { "unknown" }
+    $commit = "unknown"
+    $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+    if ($null -ne $gitCommand) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $commitOutput = & $gitCommand.Source -C $ProjectDirectory rev-parse HEAD 2>$null
+            $gitExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($gitExitCode -eq 0) {
+            $commit = ($commitOutput | Select-Object -First 1).Trim()
+        }
+    }
     $manifest = [ordered]@{
         schema_version   = 1
         source           = "docker-compose"

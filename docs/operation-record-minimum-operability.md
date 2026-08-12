@@ -33,3 +33,9 @@ Move the project from repeatable deployment to a verifiable local and acceptance
 - Destructive guard: a non-`_restore_test` database name failed before any Docker operation.
 
 Detailed commands and operating procedures are in [observability.md](deploy/observability.md) and [backup-recovery.md](deploy/backup-recovery.md).
+
+## Review Hardening
+
+- HTTP metrics wrap the client-facing timeout handler; timeout requests are counted once as 503 and release in-flight state when the response is sent.
+- The checked-in Kubernetes Job uses Goose when running the pinned rc.3 image and automatically selects the built-in migration command for later images.
+- Backup metadata treats Git as optional, so release-archive hosts still receive a valid manifest with an `unknown` commit.

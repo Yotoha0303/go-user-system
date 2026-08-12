@@ -22,6 +22,8 @@
 
 HTTP 标签只使用归一化 `method`、Gin 路由模板和 `status`。标准方法之外的输入统一为 `OTHER`，动态 ID 不进入标签，未匹配请求统一使用 `route="unmatched"`。
 
+HTTP 计时与 in-flight 统计位于请求超时包装器外层，Gin 在处理开始时写入路由模板。因此超过应用 timeout 的请求只记录一次客户端实际收到的 `503` 和实际等待时间，响应发出后 in-flight 立即归零，不等待忽略取消信号的内层 handler 返回。
+
 ## 配置校验
 
 ```powershell

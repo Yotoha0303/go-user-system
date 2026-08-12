@@ -9,7 +9,6 @@ import (
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
 	"go-user-system/internal/buildinfo"
-	"go-user-system/internal/middleware"
 	"go-user-system/internal/request"
 	"go-user-system/internal/service"
 	"go-user-system/pkg/database"
@@ -83,7 +82,7 @@ func defaultAppDeps() appDeps {
 		newServer: func(addr string, router http.Handler, cfg config.HttpServerConfig) appServer {
 			return &http.Server{
 				Addr:              addr,
-				Handler:           middleware.TimeoutHandler(router, cfg.Timeout),
+				Handler:           router,
 				ReadTimeout:       cfg.ReadTimeOut,
 				WriteTimeout:      cfg.WriteTimeout,
 				IdleTimeout:       cfg.IdleTimeout,
@@ -256,6 +255,7 @@ func run(deps appDeps) error {
 		RegistrationEnabled: &registrationEnabled,
 		SecureCookies:       cfg.Auth.RefreshCookie.Secure,
 		TrustedProxies:      cfg.HttpServer.TrustedProxies,
+		RequestTimeout:      cfg.HttpServer.Server.Timeout,
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)

@@ -1,9 +1,11 @@
 package observability
 
 import (
+	"context"
 	"go-user-system/internal/buildinfo"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +34,18 @@ type Metrics struct {
 	httpDuration    *prometheus.HistogramVec
 	httpRequestsNow *prometheus.GaugeVec
 	readiness       prometheus.Gauge
+}
+
+type routeState struct {
+	value atomic.Value
+}
+
+type routeStateContextKey struct{}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
 }
 
 func NewMetrics(build buildinfo.Info) *Metrics {
@@ -82,27 +96,42 @@ func NewMetrics(build buildinfo.Info) *Metrics {
 	return metrics
 }
 
-func (m *Metrics) HTTPMiddleware() gin.HandlerFunc {
+func (m *Metrics) RouteMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.URL.Path == "/metrics" {
-			c.Next()
+		if state, ok := c.Request.Context().Value(routeStateContextKey{}).(*routeState); ok {
+			route := c.FullPath()
+			if route == "" {
+				route = unmatchedRoute
+			}
+			state.value.Store(route)
+		}
+		c.Next()
+	}
+}
+
+func (m *Metrics) HTTPHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			next.ServeHTTP(w, r)
 			return
 		}
 
-		method := metricMethod(c.Request.Method)
+		state := &routeState{}
+		state.value.Store(unmatchedRoute)
+		r = r.WithContext(context.WithValue(r.Context(), routeStateContextKey{}, state))
+
+		method := metricMethod(r.Method)
 		started := time.Now()
 		m.httpRequestsNow.WithLabelValues(method).Inc()
 		defer m.httpRequestsNow.WithLabelValues(method).Dec()
 
-		c.Next()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
 
-		route := c.FullPath()
-		if route == "" {
-			route = unmatchedRoute
-		}
-		m.httpRequests.WithLabelValues(method, route, strconv.Itoa(c.Writer.Status())).Inc()
+		route := state.value.Load().(string)
+		m.httpRequests.WithLabelValues(method, route, strconv.Itoa(recorder.status)).Inc()
 		m.httpDuration.WithLabelValues(method, route).Observe(time.Since(started).Seconds())
-	}
+	})
 }
 
 func metricMethod(method string) string {
@@ -110,6 +139,26 @@ func metricMethod(method string) string {
 		return method
 	}
 	return "OTHER"
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(body []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (m *Metrics) Handler() http.Handler {

@@ -378,6 +378,36 @@ func TestRunReturnsNilWhenServerStopsNormally(t *testing.T) {
 	}
 }
 
+func TestRunPassesRequestTimeoutToRouter(t *testing.T) {
+	expectedTimeout := 7 * time.Second
+	deps := baseRunDeps(t)
+	deps.loadConfig = func(path string) (*config.Config, error) {
+		return &config.Config{
+			Server: config.ServerConfig{Port: 8080},
+			JWT: config.JWTConfig{
+				ExpireHours:              24,
+				AccessTokenExpireMinutes: 15,
+				RefreshTokenExpireHours:  168,
+			},
+			HttpServer: config.HttpServer{
+				Server: config.HttpServerConfig{Timeout: expectedTimeout},
+			},
+		}, nil
+	}
+	var actualTimeout time.Duration
+	deps.setupRouter = func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtime router.AuthRuntime) http.Handler {
+		actualTimeout = runtime.RequestTimeout
+		return http.NewServeMux()
+	}
+
+	if err := run(deps); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if actualTimeout != expectedTimeout {
+		t.Fatalf("expected router timeout %s, got %s", expectedTimeout, actualTimeout)
+	}
+}
+
 func TestRunReturnsShutdownError(t *testing.T) {
 	expectedErr := errors.New("shutdown failed")
 	server := &fakeAppServer{

@@ -11,6 +11,8 @@ import (
 	"go-user-system/internal/observability"
 	"go-user-system/internal/service"
 	"log/slog"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -22,9 +24,10 @@ type AuthRuntime struct {
 	RegistrationEnabled *bool
 	SecureCookies       bool
 	TrustedProxies      []string
+	RequestTimeout      time.Duration
 }
 
-func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) *gin.Engine {
+func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) http.Handler {
 	r := gin.New()
 	build := buildinfo.Current()
 	metrics := observability.NewMetrics(build)
@@ -38,7 +41,7 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 
 	r.Use(
 		middleware.RequestID(),
-		metrics.HTTPMiddleware(),
+		metrics.RouteMiddleware(),
 		middleware.AccessLog(logger),
 		middleware.Recovery(logger),
 	)
@@ -66,7 +69,7 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 	}
 	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, authService, rbacService, registrationEnabled)
 
-	return r
+	return metrics.HTTPHandler(middleware.TimeoutHandler(r, runtime.RequestTimeout))
 }
 
 func registerSystemRoutes(r *gin.Engine, healthHandler *handler.HealthHandler, systemHandler *handler.SystemHandler, metrics *observability.Metrics) {

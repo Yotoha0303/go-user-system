@@ -76,7 +76,7 @@ kubectl delete job/go-user-system-bootstrap-admin secret/go-user-system-bootstra
 ## 升级
 
 1. 把前后端镜像标签改为同一个新版本。
-2. 更新 migration Job 名称，确保 Kubernetes 创建新 Job；Makefile 直接等待清单中的 Job，不再重复硬编码名称。
+2. 更新 migration Job 名称，确保 Kubernetes 创建新 Job；Makefile 直接等待清单中的 Job，不再重复硬编码名称。当前 Job 对 `rc.3` 的 Goose CLI 与后续镜像的内置 `migrate up` 命令做兼容选择，升级镜像后应验证实际执行分支。
 3. 先应用基础设施并等待 migration 成功。
 4. 再滚动更新前后端。
 5. 验证 `/readyz`、登录和管理员权限。
