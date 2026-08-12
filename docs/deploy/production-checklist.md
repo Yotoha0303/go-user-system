@@ -56,6 +56,9 @@
 ## 可观测与验收
 
 - [ ] `/livez` 和 `/readyz` 纳入平台探针与告警。
+- [ ] `/metrics` 仅允许监控系统访问；HTTP、readiness、Go Runtime 和 build info 指标可查询。
+- [ ] Prometheus 配置和规则通过 `promtool`，TargetDown/NotReady 告警在非生产环境实际触发并恢复。
+- [ ] Alertmanager 接收器、升级联系人和通知 Secret 已在部署平台配置；不能只依赖本地 Prometheus 页面。
 - [ ] 日志采集支持按 `request_id` 检索，且不记录密码、密钥、Token 或密码哈希。
 - [ ] 浏览器注册、登录、资料、登出流程通过。
 - [ ] 管理员角色查询、权限查询和角色分配通过。

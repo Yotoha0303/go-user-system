@@ -4,16 +4,26 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Added runtime build identification through `/version`, OCI image labels, startup logs, and the `go_user_system_build_info` metric.
+- Added bounded-label Prometheus HTTP, readiness, Go runtime, and process metrics with a fixed-version Compose monitoring overlay and four baseline alert rules.
+- Added checksum-manifested MySQL backups and guarded restore drills that only target isolated `_restore_test` databases and emit machine-readable evidence.
+
 ### Changed
 
 - Modernized the React workspace with a responsive desktop sidebar, mobile navigation drawer, denser account and RBAC views, and consistent shared controls.
 - Reworked anonymous authentication screens around an optimized identity visual while preserving the existing authentication and authorization contracts.
 - Updated desktop and mobile documentation screenshots to match the current interface.
+- Replaced the migration container's separately downloaded Goose CLI with the application-owned `migrate up` command and a migration-only database configuration path.
+- Parameterized release and Kubernetes image builds with version, commit, and build-time metadata, and removed the hard-coded migration Job name from Kubernetes waits.
 
 ### Testing
 
 - Added mobile navigation drawer interaction coverage.
 - Verified the interface at desktop and mobile viewports with Playwright visual checks.
+- Added CI validation for merged Compose configuration, Prometheus configuration and rules, and PowerShell operations script syntax.
+- Exercised target-down alert firing/recovery and a checksum-verified MySQL backup/restore cycle in an isolated Compose stack.
 
 See `ROADMAP.md` for planned work.
 

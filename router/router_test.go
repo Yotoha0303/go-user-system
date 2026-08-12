@@ -73,3 +73,17 @@ func TestRegistrationRouteCanBeDisabled(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, recorder.Code)
 	}
 }
+
+func TestSystemRoutesExposeVersionAndMetrics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := SetupRouter(nil, testLogger(), &auth.TokenManager{})
+
+	for _, path := range []string{"/version", "/metrics"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		r.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected %s status %d, got %d", path, http.StatusOK, recorder.Code)
+		}
+	}
+}

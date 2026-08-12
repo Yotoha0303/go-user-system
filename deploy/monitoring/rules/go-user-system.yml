@@ -1,0 +1,48 @@
+groups:
+  - name: go-user-system.availability
+    rules:
+      - alert: GoUserSystemTargetDown
+        expr: up{job="go-user-system"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Go User System metrics target is down
+          runbook: go-user-system-ops/runbook.md
+
+      - alert: GoUserSystemNotReady
+        expr: go_user_system_readiness == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Go User System is not ready
+          runbook: go-user-system-ops/runbook.md
+
+  - name: go-user-system.http
+    rules:
+      - alert: GoUserSystemHigh5xxRate
+        expr: |
+          sum(rate(go_user_system_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(go_user_system_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Go User System 5xx rate is above 5 percent
+          runbook: go-user-system-ops/runbook.md
+
+      - alert: GoUserSystemHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(go_user_system_http_request_duration_seconds_bucket[10m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Go User System p95 latency is above one second
+          runbook: go-user-system-ops/runbook.md

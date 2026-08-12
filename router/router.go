@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
+	"go-user-system/internal/buildinfo"
 	"go-user-system/internal/handler"
 	"go-user-system/internal/middleware"
 	"go-user-system/internal/model"
+	"go-user-system/internal/observability"
 	"go-user-system/internal/service"
 	"log/slog"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -20,10 +24,13 @@ type AuthRuntime struct {
 	RegistrationEnabled *bool
 	SecureCookies       bool
 	TrustedProxies      []string
+	RequestTimeout      time.Duration
 }
 
-func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) *gin.Engine {
+func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtimes ...AuthRuntime) http.Handler {
 	r := gin.New()
+	build := buildinfo.Current()
+	metrics := observability.NewMetrics(build)
 	runtime := AuthRuntime{}
 	if len(runtimes) > 0 {
 		runtime = runtimes[0]
@@ -34,6 +41,7 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 
 	r.Use(
 		middleware.RequestID(),
+		metrics.RouteMiddleware(),
 		middleware.AccessLog(logger),
 		middleware.Recovery(logger),
 	)
@@ -50,9 +58,10 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 		SecureCookies: runtime.SecureCookies,
 	}, authService)
 	rbacHandler := handler.NewRBACHandler(rbacService)
-	healthHandler := handler.NewHealthHandler(db, healthCheckers...)
+	healthHandler := handler.NewHealthHandlerWithRecorder(db, metrics, healthCheckers...)
+	systemHandler := handler.NewSystemHandler(build)
 
-	registerHealthRoutes(r, healthHandler)
+	registerSystemRoutes(r, healthHandler, systemHandler, metrics)
 	registerSwaggerRoutes(r)
 	registrationEnabled := true
 	if runtime.RegistrationEnabled != nil {
@@ -60,13 +69,15 @@ func SetupRouter(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManag
 	}
 	registerAPIRoutes(r, userHandler, rbacHandler, tokenManager, authService, rbacService, registrationEnabled)
 
-	return r
+	return metrics.HTTPHandler(middleware.TimeoutHandler(r, runtime.RequestTimeout))
 }
 
-func registerHealthRoutes(r *gin.Engine, healthHandler *handler.HealthHandler) {
+func registerSystemRoutes(r *gin.Engine, healthHandler *handler.HealthHandler, systemHandler *handler.SystemHandler, metrics *observability.Metrics) {
 	r.GET("/ping", healthHandler.PingHandler)
 	r.GET("/livez", healthHandler.LivezHandler)
 	r.GET("/readyz", healthHandler.ReadyzHandler)
+	r.GET("/version", systemHandler.VersionHandler)
+	r.GET("/metrics", gin.WrapH(metrics.Handler()))
 }
 
 func registerAPIRoutes(

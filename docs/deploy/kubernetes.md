@@ -54,6 +54,8 @@ kubectl get job,pod,deploy,svc,ingress -n go-user-system
 kubectl logs job/go-user-system-migrate-v1-0-0-rc-3 -n go-user-system
 ```
 
+后端 Pod 带 `/metrics` Prometheus 抓取注解，但仓库不安装集群监控组件。使用已有 Prometheus/Operator 时，应通过服务发现抓取 ClusterIP，并使用 NetworkPolicy 限制监控访问；不要为 `/metrics` 增加公网 Ingress。详见 `observability.md`。
+
 ## 初始化管理员
 
 普通注册不会获得管理员权限。创建短期 bootstrap Secret 并运行一次性 Job：
@@ -74,7 +76,7 @@ kubectl delete job/go-user-system-bootstrap-admin secret/go-user-system-bootstra
 ## 升级
 
 1. 把前后端镜像标签改为同一个新版本。
-2. 更新 migration Job 名称，确保 Kubernetes 创建新 Job。
+2. 更新 migration Job 名称，确保 Kubernetes 创建新 Job；Makefile 直接等待清单中的 Job，不再重复硬编码名称。当前 Job 对 `rc.3` 的 Goose CLI 与后续镜像的内置 `migrate up` 命令做兼容选择，升级镜像后应验证实际执行分支。
 3. 先应用基础设施并等待 migration 成功。
 4. 再滚动更新前后端。
 5. 验证 `/readyz`、登录和管理员权限。

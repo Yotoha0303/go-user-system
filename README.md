@@ -23,6 +23,8 @@
 - 可关闭的公开注册入口：`REGISTRATION_ENABLED=false`。
 - 响应式 React 管理工作台、内存 Access Token、Cookie 会话恢复和权限路由。
 - Swagger、健康检查、结构化日志、Request ID、超时和优雅关闭。
+- `/version` 构建识别、Prometheus HTTP/运行时/readiness 指标和 4 条基础告警规则。
+- 带 SHA-256 manifest 的 MySQL 备份脚本，以及仅允许 `_restore_test` 的恢复演练脚本。
 - Compose 全栈、Kubernetes、CI、CodeQL、Dependabot 和 GHCR 发布。
 
 ## 快速开始
@@ -83,6 +85,8 @@ docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD 
 | `http://localhost:8080` | Web 应用 |
 | `http://localhost:8082/swagger/index.html` | Swagger |
 | `http://localhost:8082/readyz` | MySQL 与 Redis 就绪检查 |
+| `http://localhost:8082/version` | 运行版本、提交和构建时间 |
+| `http://localhost:8082/metrics` | Prometheus 指标；Compose 仅绑定本机，Kubernetes 不通过 Ingress 暴露 |
 
 完整 Compose 说明见 `docs/deploy/local-compose.md`。
 
@@ -108,6 +112,8 @@ router/                 API、健康检查和 Swagger 路由
 migrations/             Goose SQL migration
 frontend/               React 应用、单元测试、Playwright 和 Nginx 镜像
 k8s/                    Kubernetes 工作负载、迁移 Job、服务和 Ingress
+deploy/monitoring/       Prometheus 配置与基础告警规则
+scripts/ops/             MySQL 备份与隔离恢复演练脚本
 docs/                   API、部署、迭代计划和操作记录
 .github/                 CI、CodeQL、发布、模板和依赖更新配置
 ```
@@ -163,6 +169,7 @@ make vet
 make security
 make frontend-check
 make migrate-validate
+make observability-validate
 ```
 
 MySQL 集成测试要求 `TEST_DATABASE_DSN` 指向数据库名包含 `test` 的专用库；测试工具会拒绝操作其他数据库。
@@ -175,6 +182,35 @@ npm --prefix frontend run test:e2e
 ```
 
 GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并在完整栈上执行 Playwright 流程。
+
+## 最小可运维
+
+在默认 Compose 栈上增加 Prometheus：
+
+```powershell
+make observability-validate
+make observability-up
+```
+
+Prometheus 监听 `http://127.0.0.1:9090`，抓取后端 `/metrics`，并加载 TargetDown、NotReady、High5xxRate 和 HighP95Latency 四条规则。停止时执行：
+
+```powershell
+make observability-down
+```
+
+对运行中的 Compose MySQL 创建带校验和与 manifest 的备份：
+
+```powershell
+make ops-backup
+```
+
+恢复演练只能写入名称以 `_restore_test` 结尾的数据库，并要求显式指定备份：
+
+```powershell
+make ops-restore-drill BACKUP_PATH="backups/go_user_system-<timestamp>.sql"
+```
+
+完整说明见 `docs/deploy/observability.md` 和 `docs/deploy/backup-recovery.md`。这些能力用于本地和验收环境；生产仍需要外部告警路由、托管备份/PITR、MySQL/Redis 高可用和正式值班。
 
 ## API 概览
 
@@ -199,6 +235,8 @@ GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并�
 
 - Compose：`docs/deploy/local-compose.md`
 - Kubernetes：`docs/deploy/kubernetes.md`
+- 可观测性：`docs/deploy/observability.md`
+- 备份恢复：`docs/deploy/backup-recovery.md`
 - 生产检查：`docs/deploy/production-checklist.md`
 - 发布：推送 `v*` 标签后，Actions 构建多架构 GHCR 镜像、二进制、前端归档和 SHA-256 校验文件。
 - 回滚：使用上一个固定版本镜像；数据库回滚前先确认 migration 的数据兼容性和备份。
@@ -211,6 +249,7 @@ GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并�
 - `docs/operation-record-production-auth-hardening.md`：认证加固操作记录。
 - `docs/operation-record-auth-delivery-hardening.md`：`rc.3` 浏览器认证、代理和生产配置加固记录。
 - `docs/operation-record-frontend-modernization.md`：响应式前端工作台改造、视觉验收和交付记录。
+- `docs/operation-record-minimum-operability.md`：版本、指标、告警、备份恢复和验收记录。
 - `ROADMAP.md`：稳定版和后续能力规划。
 - `CHANGELOG.md`：版本变更。
 

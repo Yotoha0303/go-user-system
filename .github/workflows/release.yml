@@ -53,6 +53,9 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        name: Prepare build metadata
+        run: echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -66,6 +69,10 @@ jobs:
           context: ${{ matrix.context }}
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.build.outputs.build_time }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
@@ -93,11 +100,13 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/go-user-system ./cmd
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X go-user-system/internal/buildinfo.Version=${VERSION} -X go-user-system/internal/buildinfo.Commit=${GITHUB_SHA} -X go-user-system/internal/buildinfo.BuildTime=${BUILD_TIME}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/go-user-system ./cmd
           tar -C dist -czf "dist/go-user-system_${VERSION}_linux_amd64.tar.gz" go-user-system
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/go-user-system ./cmd
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/go-user-system ./cmd
           tar -C dist -czf "dist/go-user-system_${VERSION}_linux_arm64.tar.gz" go-user-system
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/go-user-system.exe ./cmd
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/go-user-system.exe ./cmd
           (cd dist && zip "go-user-system_${VERSION}_windows_amd64.zip" go-user-system.exe)
           rm dist/go-user-system dist/go-user-system.exe
           npm ci --prefix frontend

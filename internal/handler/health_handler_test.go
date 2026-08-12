@@ -26,8 +26,16 @@ type fakeHealthChecker struct {
 	err error
 }
 
+type fakeReadinessRecorder struct {
+	values []bool
+}
+
 func (c fakeHealthChecker) Ping(context.Context) error {
 	return c.err
+}
+
+func (r *fakeReadinessRecorder) SetReady(ready bool) {
+	r.values = append(r.values, ready)
 }
 
 func (healthSQLDriver) Open(name string) (driver.Conn, error) {
@@ -202,5 +210,22 @@ func TestReadyzHandlerFailsWhenAuthenticationStorePingFails(t *testing.T) {
 	}
 	if body.Code != response.CodeReadinessFailed {
 		t.Fatalf("expected code %d, got %d", response.CodeReadinessFailed, body.Code)
+	}
+}
+
+func TestReadyzHandlerRecordsReadinessTransitions(t *testing.T) {
+	recorder := &fakeReadinessRecorder{}
+	healthHandler := NewHealthHandlerWithRecorder(
+		openHealthGormDB(t, "ready"),
+		recorder,
+		fakeHealthChecker{},
+	)
+
+	performJSONRequest(healthHandler.ReadyzHandler, http.MethodGet, "/readyz", "")
+	healthHandler.checkers = []HealthChecker{fakeHealthChecker{err: errors.New("redis unavailable")}}
+	performJSONRequest(healthHandler.ReadyzHandler, http.MethodGet, "/readyz", "")
+
+	if len(recorder.values) != 2 || !recorder.values[0] || recorder.values[1] {
+		t.Fatalf("expected readiness transitions [true false], got %v", recorder.values)
 	}
 }
