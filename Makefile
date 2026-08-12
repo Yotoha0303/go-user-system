@@ -1,5 +1,16 @@
 APP_NAME := go-user-system
 IMAGE_NAME := go-user-system:dev
+VERSION ?= dev
+COMMIT ?= unknown
+BUILD_TIME ?= unknown
+PROMETHEUS_IMAGE := quay.io/prometheus/prometheus:v3.5.5
+OBSERVABILITY_COMPOSE := docker compose -f compose.yaml -f compose.observability.yaml
+ifeq ($(OS),Windows_NT)
+POWERSHELL ?= powershell
+else
+POWERSHELL ?= pwsh
+endif
+GO_LDFLAGS := -X go-user-system/internal/buildinfo.Version=$(VERSION) -X go-user-system/internal/buildinfo.Commit=$(COMMIT) -X go-user-system/internal/buildinfo.BuildTime=$(BUILD_TIME)
 
 # Kubernetes
 K8S_DIR := k8s
@@ -24,7 +35,7 @@ CALLVIS_HTTP ?= 127.0.0.1:7878
 .PHONY: help run test coverage coverage-html integration-test race-test vet lint lint-fix security frontend-check e2e bootstrap-admin swagger callvis callvis-serve \
 	build build-windows build-linux clean tidy \
 	goose-version migrate-create migrate-validate migrate-status migrate-version migrate-up migrate-up-by-one migrate-down migrate-redo migrate-reset migrate-fix \
-	docker-build compose-up compose-down compose-logs ci \
+	docker-build compose-up compose-down compose-logs observability-validate observability-up observability-down ops-backup ops-restore-drill ci \
 	k8s-namespace k8s-build k8s-build-kind k8s-build-push k8s-port-forward k8s-all \
 	k8s-deploy k8s-undeploy k8s-status k8s-logs k8s-apply k8s-dry-run k8s-restart k8s-validate k8s-wait \
 	k8s-info \
@@ -94,6 +105,11 @@ help:
 	@echo   compose-up          Start Docker Compose stack
 	@echo   compose-down        Stop Docker Compose stack
 	@echo   compose-logs        Follow app logs
+	@echo   observability-up    Start the full stack with Prometheus
+	@echo   observability-down  Stop the full stack with Prometheus
+	@echo   observability-validate Validate Prometheus and Compose configuration
+	@echo   ops-backup          Back up Compose MySQL with checksum and manifest
+	@echo   ops-restore-drill   Restore BACKUP_PATH into RESTORE_DATABASE \(must end with _restore_test\)
 	@echo golangci:
 	@echo   lint                Run golangci-lint
 	@echo   lint-fix            Apply supported automatic lint fixes
@@ -148,16 +164,16 @@ callvis-serve:
 	go run github.com/ofabry/go-callvis@$(CALLVIS_VERSION) -algo rta -focus= -group pkg,type -limit $(APP_NAME) -rankdir LR -http $(CALLVIS_HTTP) -skipbrowser ./cmd
 
 build:
-	go build -o bin/$(APP_NAME) ./cmd
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/$(APP_NAME) ./cmd
 
 build-windows: export GOOS=windows
 build-windows:
-	go build -o bin/$(APP_NAME).exe ./cmd
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/$(APP_NAME).exe ./cmd
 
 build-linux: export CGO_ENABLED=0
 build-linux: export GOOS=linux
 build-linux:
-	go build -o bin/$(APP_NAME) ./cmd
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o bin/$(APP_NAME) ./cmd
 
 clean:
 	rm -rf bin coverage.out coverage.html "$(SWAGGER_CACHE)" "$(CALLVIS_CACHE)"
@@ -206,7 +222,7 @@ lint-fix:
 	$(GOLANGCI_LINT) run --fix ./...
 
 docker-build:
-	docker build -t $(IMAGE_NAME) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE_NAME) .
 
 compose-up:
 	docker compose up -d --build
@@ -216,6 +232,28 @@ compose-down:
 
 compose-logs:
 	docker compose logs -f app
+
+observability-validate:
+	$(OBSERVABILITY_COMPOSE) config --quiet
+	docker run --rm --entrypoint /bin/promtool -v "$(CURDIR)/deploy/monitoring:/etc/prometheus:ro" $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm --entrypoint /bin/promtool -v "$(CURDIR)/deploy/monitoring:/etc/prometheus:ro" $(PROMETHEUS_IMAGE) check rules /etc/prometheus/rules/go-user-system.yml
+
+observability-up:
+ifeq ($(OS),Windows_NT)
+	$(POWERSHELL) -NoProfile -Command "$$env:APP_VERSION='$(VERSION)'; $$env:APP_COMMIT='$(COMMIT)'; $$env:APP_BUILD_TIME='$(BUILD_TIME)'; docker compose -f compose.yaml -f compose.observability.yaml up -d --build --wait"
+else
+	APP_VERSION=$(VERSION) APP_COMMIT=$(COMMIT) APP_BUILD_TIME=$(BUILD_TIME) $(OBSERVABILITY_COMPOSE) up -d --build --wait
+endif
+
+observability-down:
+	$(OBSERVABILITY_COMPOSE) down
+
+ops-backup:
+	$(POWERSHELL) -NoProfile -File scripts/ops/backup-mysql.ps1
+
+ops-restore-drill:
+	$(if $(BACKUP_PATH),,$(error BACKUP_PATH is required))
+	$(POWERSHELL) -NoProfile -File scripts/ops/restore-mysql.ps1 -BackupPath "$(BACKUP_PATH)" -RestoreDatabase "$(or $(RESTORE_DATABASE),go_user_system_restore_test)" -ConfirmRestore
 
 ci:
 	$(MAKE) lint
@@ -232,8 +270,8 @@ k8s-namespace:
 	kubectl create namespace $(K8S_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 
 k8s-build:
-	docker build --platform linux/amd64 -t $(K8S_BACKEND_IMAGE) .
-	docker build --platform linux/amd64 -t $(K8S_FRONTEND_IMAGE) ./frontend
+	docker build --platform linux/amd64 --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(K8S_BACKEND_IMAGE) .
+	docker build --platform linux/amd64 --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(K8S_FRONTEND_IMAGE) ./frontend
 
 k8s-build-kind: k8s-build
 	kind load docker-image $(K8S_BACKEND_IMAGE) $(K8S_FRONTEND_IMAGE) --name $(KIND_NAME)
@@ -258,7 +296,7 @@ k8s-deploy: k8s-namespace
 	kubectl wait --for=condition=available deployment/go-user-system-mysql -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl wait --for=condition=available deployment/go-user-system-redis -n $(K8S_NAMESPACE) --timeout=600s
 	kubectl apply -f $(K8S_DIR)/migration-job.yaml
-	kubectl wait --for=condition=complete job/go-user-system-migrate-v1-0-0-rc-3 -n $(K8S_NAMESPACE) --timeout=600s
+	kubectl wait --for=condition=complete -f $(K8S_DIR)/migration-job.yaml --timeout=600s
 	kubectl apply -f $(K8S_DIR)/service.yaml
 	kubectl apply -f $(K8S_DIR)/frontend-service.yaml
 	kubectl apply -f $(K8S_DIR)/deployment.yaml

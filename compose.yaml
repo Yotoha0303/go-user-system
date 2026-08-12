@@ -35,13 +35,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-dev}
+        COMMIT: ${APP_COMMIT:-unknown}
+        BUILD_TIME: ${APP_BUILD_TIME:-unknown}
     image: go-user-system-backend:dev
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        goose -dir /app/migrations mysql
-        "$${DB_USER}:$${DB_PASSWORD}@tcp($${DB_HOST}:$${DB_PORT})/$${DB_NAME}?parseTime=true&multiStatements=true"
-        up
+    command: ["migrate", "up"]
     environment:
       DB_HOST: mysql
       DB_PORT: "3306"
@@ -57,6 +56,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-dev}
+        COMMIT: ${APP_COMMIT:-unknown}
+        BUILD_TIME: ${APP_BUILD_TIME:-unknown}
     image: go-user-system-backend:dev
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8082}:8082"
@@ -91,6 +94,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-dev}
+        COMMIT: ${APP_COMMIT:-unknown}
+        BUILD_TIME: ${APP_BUILD_TIME:-unknown}
     image: go-user-system-frontend:dev
     ports:
       - "${FRONTEND_PORT:-8080}:8080"

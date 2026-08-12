@@ -577,6 +577,18 @@ paths:
       summary: 服务就绪检查
       tags:
       - health
+  /version:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询运行版本
+      tags:
+      - system
 schemes:
 - http
 securityDefinitions:

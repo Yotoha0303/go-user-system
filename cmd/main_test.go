@@ -126,6 +126,10 @@ func baseRunDeps(t *testing.T) appDeps {
 		initDB: func(cfg *config.Config) (*gorm.DB, error) {
 			return openMainGormDB(t), nil
 		},
+		openMigrationDB: func(ctx context.Context) (*sql.DB, error) {
+			db := openMainGormDB(t)
+			return db.DB()
+		},
 		newAuthStateStore: func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error) {
 			return authstate.NewMemoryStore(), nil
 		},
@@ -136,6 +140,9 @@ func baseRunDeps(t *testing.T) appDeps {
 			return http.NewServeMux()
 		},
 		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
+			return nil
+		},
+		migrateUp: func(ctx context.Context, db *sql.DB, dir string) error {
 			return nil
 		},
 		getenv: func(key string) string { return "" },
@@ -150,7 +157,7 @@ func baseRunDeps(t *testing.T) appDeps {
 func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	deps := defaultAppDeps()
 
-	if deps.loadEnv == nil || deps.loadConfig == nil || deps.initDB == nil {
+	if deps.loadEnv == nil || deps.loadConfig == nil || deps.initDB == nil || deps.openMigrationDB == nil {
 		t.Fatal("expected default dependencies to be initialized")
 	}
 	if deps.shutdownTimeout != 10*time.Second {
@@ -162,11 +169,43 @@ func TestDefaultAppDepsProvidesDependencies(t *testing.T) {
 	if deps.setupRouter(nil, nil, &auth.TokenManager{}, router.AuthRuntime{}) == nil {
 		t.Fatal("expected default router")
 	}
-	if deps.bootstrapAdmin == nil || deps.getenv == nil {
+	if deps.bootstrapAdmin == nil || deps.migrateUp == nil || deps.getenv == nil {
 		t.Fatal("expected administrator bootstrap dependencies")
 	}
 	if deps.newServer(":0", http.NewServeMux(), config.HttpServerConfig{}) == nil {
 		t.Fatal("expected default http server")
+	}
+}
+
+func TestRunMigrateUpUsesMigrationsDirectory(t *testing.T) {
+	deps := baseRunDeps(t)
+	called := false
+	deps.migrateUp = func(ctx context.Context, db *sql.DB, dir string) error {
+		called = true
+		if db == nil || dir != "migrations" {
+			t.Fatalf("unexpected migration arguments: db=%v dir=%q", db, dir)
+		}
+		return nil
+	}
+
+	if err := runMigrateUp(deps); err != nil {
+		t.Fatalf("run migration failed: %v", err)
+	}
+	if !called {
+		t.Fatal("expected migration runner to be called")
+	}
+}
+
+func TestRunMigrateUpReturnsMigrationError(t *testing.T) {
+	expectedErr := errors.New("migration failed")
+	deps := baseRunDeps(t)
+	deps.migrateUp = func(ctx context.Context, db *sql.DB, dir string) error {
+		return expectedErr
+	}
+
+	err := runMigrateUp(deps)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected migration error, got %v", err)
 	}
 }
 

@@ -10,6 +10,10 @@ RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.28-alpine
 
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
@@ -20,4 +24,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 
 LABEL org.opencontainers.image.source="https://github.com/Yotoha0303/go-user-system" \
   org.opencontainers.image.description="Go User System web client" \
-  org.opencontainers.image.version="1.0.0-rc.3"
+  org.opencontainers.image.version="${VERSION}" \
+  org.opencontainers.image.revision="${COMMIT}" \
+  org.opencontainers.image.created="${BUILD_TIME}"

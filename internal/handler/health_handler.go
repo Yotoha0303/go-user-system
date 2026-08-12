@@ -13,13 +13,22 @@ type HealthChecker interface {
 	Ping(ctx context.Context) error
 }
 
+type ReadinessRecorder interface {
+	SetReady(ready bool)
+}
+
 type HealthHandler struct {
-	db       *gorm.DB
-	checkers []HealthChecker
+	db                *gorm.DB
+	checkers          []HealthChecker
+	readinessRecorder ReadinessRecorder
 }
 
 func NewHealthHandler(db *gorm.DB, checkers ...HealthChecker) *HealthHandler {
-	return &HealthHandler{db: db, checkers: checkers}
+	return NewHealthHandlerWithRecorder(db, nil, checkers...)
+}
+
+func NewHealthHandlerWithRecorder(db *gorm.DB, recorder ReadinessRecorder, checkers ...HealthChecker) *HealthHandler {
+	return &HealthHandler{db: db, checkers: checkers, readinessRecorder: recorder}
 }
 
 // PingHandler godoc
@@ -55,23 +64,23 @@ func (h *HealthHandler) LivezHandler(c *gin.Context) {
 // @Router /readyz [get]
 func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 	if h.db == nil {
-		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not initialized")
+		h.failReadiness(c, "database is not initialized")
 		return
 	}
 
 	if h.db.Config == nil {
-		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
+		h.failReadiness(c, "database is not ready")
 		return
 	}
 
 	sqlDB, err := h.db.DB()
 	if err != nil {
-		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
+		h.failReadiness(c, "database is not ready")
 		return
 	}
 
 	if err := sqlDB.PingContext(c.Request.Context()); err != nil {
-		response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "database is not ready")
+		h.failReadiness(c, "database is not ready")
 		return
 	}
 
@@ -80,12 +89,24 @@ func (h *HealthHandler) ReadyzHandler(c *gin.Context) {
 			continue
 		}
 		if err := checker.Ping(c.Request.Context()); err != nil {
-			response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, "authentication state store is not ready")
+			h.failReadiness(c, "authentication state store is not ready")
 			return
 		}
 	}
 
+	h.recordReadiness(true)
 	response.Success(c, gin.H{
 		"status": "ready",
 	})
+}
+
+func (h *HealthHandler) failReadiness(c *gin.Context, message string) {
+	h.recordReadiness(false)
+	response.Fail(c, http.StatusServiceUnavailable, response.CodeReadinessFailed, message)
+}
+
+func (h *HealthHandler) recordReadiness(ready bool) {
+	if h.readinessRecorder != nil {
+		h.readinessRecorder.SetReady(ready)
+	}
 }

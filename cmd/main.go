@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"go-user-system/config"
 	"go-user-system/internal/auth"
 	"go-user-system/internal/authstate"
+	"go-user-system/internal/buildinfo"
 	"go-user-system/internal/middleware"
 	"go-user-system/internal/request"
 	"go-user-system/internal/service"
@@ -21,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 )
 
@@ -33,10 +36,12 @@ type appDeps struct {
 	loadEnv           func() error
 	loadConfig        func(path string) (*config.Config, error)
 	initDB            func(cfg *config.Config) (*gorm.DB, error)
+	openMigrationDB   func(ctx context.Context) (*sql.DB, error)
 	newAuthStateStore func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error)
 	newTokenManager   func(secret string, issuer string, accessTTL time.Duration, refreshTTL time.Duration) (*auth.TokenManager, error)
 	setupRouter       func(db *gorm.DB, logger *slog.Logger, tokenManager *auth.TokenManager, runtime router.AuthRuntime) http.Handler
 	bootstrapAdmin    func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error
+	migrateUp         func(ctx context.Context, db *sql.DB, dir string) error
 	getenv            func(key string) string
 	newServer         func(addr string, handler http.Handler, cfg config.HttpServerConfig) appServer
 	notify            func(c chan<- os.Signal, sig ...os.Signal)
@@ -45,9 +50,10 @@ type appDeps struct {
 
 func defaultAppDeps() appDeps {
 	return appDeps{
-		loadEnv:    config.LoadEnv,
-		loadConfig: config.Load,
-		initDB:     database.InitDB,
+		loadEnv:         config.LoadEnv,
+		loadConfig:      config.Load,
+		initDB:          database.InitDB,
+		openMigrationDB: database.OpenMigrationDBFromEnv,
 		newAuthStateStore: func(ctx context.Context, cfg config.RedisConfig) (authstate.Store, error) {
 			if !cfg.Enabled {
 				return authstate.NewMemoryStore(), nil
@@ -66,6 +72,12 @@ func defaultAppDeps() appDeps {
 		},
 		bootstrapAdmin: func(ctx context.Context, db *gorm.DB, req request.RegisterRequest) error {
 			return service.NewUserService(db).BootstrapAdmin(ctx, req)
+		},
+		migrateUp: func(ctx context.Context, db *sql.DB, dir string) error {
+			if err := goose.SetDialect("mysql"); err != nil {
+				return err
+			}
+			return goose.UpContext(ctx, db, dir)
 		},
 		getenv: os.Getenv,
 		newServer: func(addr string, router http.Handler, cfg config.HttpServerConfig) appServer {
@@ -102,14 +114,42 @@ var (
 func main() {
 	deps := getDefaultAppDeps()
 	var err error
-	if len(os.Args) > 1 && os.Args[1] == "bootstrap-admin" {
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "bootstrap-admin":
 		err = runBootstrapAdmin(deps)
-	} else {
+	case len(os.Args) > 1 && os.Args[1] == "migrate":
+		if len(os.Args) != 3 || os.Args[2] != "up" {
+			err = errors.New("usage: go-user-system migrate up")
+		} else {
+			err = runMigrateUp(deps)
+		}
+	default:
 		err = run(deps)
 	}
 	if err != nil {
 		fatalf("application failed: %v", err)
 	}
+}
+
+func runMigrateUp(deps appDeps) error {
+	if err := deps.loadEnv(); err != nil {
+		return err
+	}
+
+	sqlDB, err := deps.openMigrationDB(context.Background())
+	if err != nil {
+		return fmt.Errorf("open migration database failed: %w", err)
+	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			log.Printf("close database failed: %v", err)
+		}
+	}()
+
+	if err := deps.migrateUp(context.Background(), sqlDB, "migrations"); err != nil {
+		return fmt.Errorf("apply database migrations: %w", err)
+	}
+	return nil
 }
 
 func runBootstrapAdmin(deps appDeps) error {
@@ -182,6 +222,7 @@ func run(deps appDeps) error {
 	slog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	logger := slog
+	build := buildinfo.Current()
 
 	tokenManager, err := deps.newTokenManager(
 		cfg.JWT.Secret,
@@ -227,7 +268,13 @@ func run(deps appDeps) error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("server starting:", "addr", addr)
+		logger.Info(
+			"server starting",
+			"addr", addr,
+			"version", build.Version,
+			"commit", build.Commit,
+			"build_time", build.BuildTime,
+		)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 			return

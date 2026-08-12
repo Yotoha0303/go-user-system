@@ -106,7 +106,37 @@ jobs:
           DB_ROOT_PASSWORD: ci-root-password
           DB_PASSWORD: ci-app-password
           JWT_SECRET: ci_jwt_secret_at_least_32_characters_long
-        run: docker compose config --quiet
+        run: docker compose -f compose.yaml -f compose.observability.yaml config --quiet
+
+      - name: Validate Prometheus configuration and rules
+        run: |
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/deploy/monitoring:/etc/prometheus:ro" \
+            quay.io/prometheus/prometheus:v3.5.5 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint /bin/promtool \
+            -v "$PWD/deploy/monitoring:/etc/prometheus:ro" \
+            quay.io/prometheus/prometheus:v3.5.5 \
+            check rules /etc/prometheus/rules/go-user-system.yml
+
+      - name: Validate operations PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem scripts/ops/*.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)" }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
 
       - name: Install kubeconform
         run: |

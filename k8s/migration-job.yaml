@@ -20,12 +20,7 @@ spec:
         - name: migrate
           image: ghcr.io/yotoha0303/go-user-system-backend:v1.0.0-rc.3
           imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "-c"]
-          args:
-            - >-
-              goose -dir /app/migrations mysql
-              "${DB_USER}:${DB_PASSWORD}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true&multiStatements=true"
-              up
+          args: ["migrate", "up"]
           env:
             - name: DB_PASSWORD
               valueFrom:
