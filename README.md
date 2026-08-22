@@ -94,7 +94,7 @@ docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD 
 
 | 区域 | 技术 |
 | --- | --- |
-| 后端 | Go 1.25.12、Gin、GORM、bcrypt、JWT |
+| 后端 | Go 1.25.13、Gin、GORM、bcrypt、JWT |
 | 数据 | MySQL 8.4、Redis 7.4、Goose migration |
 | 前端 | React 18、TypeScript 5、Vite 8、Redux Toolkit、Tailwind CSS |
 | 测试 | Go testing、httptest、miniredis、MySQL integration、Vitest、Testing Library、Playwright |

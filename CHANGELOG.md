@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Updated Go to 1.25.13 to resolve reachable standard-library vulnerabilities reported by `govulncheck`.
 - Modernized the React workspace with a responsive desktop sidebar, mobile navigation drawer, denser account and RBAC views, and consistent shared controls.
 - Reworked anonymous authentication screens around an optimized identity visual while preserving the existing authentication and authorization contracts.
 - Updated desktop and mobile documentation screenshots to match the current interface.
