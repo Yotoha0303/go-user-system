@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   -ldflags="-s -w -X go-user-system/internal/buildinfo.Version=${VERSION} -X go-user-system/internal/buildinfo.Commit=${COMMIT} -X go-user-system/internal/buildinfo.BuildTime=${BUILD_TIME}" \
   -o go-user-system ./cmd
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 ARG VERSION=dev
 ARG COMMIT=unknown
