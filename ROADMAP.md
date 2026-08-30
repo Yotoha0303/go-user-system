@@ -1,5 +1,7 @@
 # Roadmap
 
+当前认证现代化缺陷、证据和验收标准见 `docs/auth-modernization-gaps.md`。
+
 ## 1.0 stable
 
 - Validate `v1.0.0-rc.3` on a clean host and a real Kubernetes ingress with TLS.
