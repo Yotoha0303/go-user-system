@@ -142,4 +142,3 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     alert_cleared       = $alertCleared
     duration_seconds    = [int]((Get-Date) - $startedAt).TotalSeconds
 } | ConvertTo-Json | Set-Content -LiteralPath $OutputPath -Encoding utf8
-
