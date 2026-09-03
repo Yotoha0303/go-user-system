@@ -1,4 +1,4 @@
-# Go User System
+# Go 用户认证与 RBAC 系统
 
 [![CI](https://github.com/Yotoha0303/go-user-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Yotoha0303/go-user-system/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Yotoha0303/go-user-system/actions/workflows/codeql.yml/badge.svg)](https://github.com/Yotoha0303/go-user-system/actions/workflows/codeql.yml)
@@ -8,23 +8,23 @@
 
 当前公开交付版本为 `v1.0.0-rc.3`。这是候选版本，适合学习、二次开发和非关键环境验证；生产使用前请完成 `docs/deploy/production-checklist.md`。
 
-![Go User System sign-in screen](docs/assets/application-home.webp)
+![登录界面](docs/assets/application-home.webp)
 
 ## 功能
 
 - 用户注册、登录、资料查询、昵称修改、密码修改和登出。
-- JWT Access/Refresh 双 Token；Refresh Token 使用 HttpOnly Cookie、哈希存储和 Rotation。
+- Access / Refresh 双 JWT；Refresh Token 使用 HttpOnly Cookie、哈希存储与 Rotation。
 - Token Family 重放检测、用户 `auth_version`、改密后全会话失效。
 - 浏览器登出同步吊销当前 Access JTI；Web Locks 串行化多标签页 Refresh Rotation。
-- Redis JTI 吊销和账号/IP 双维度登录失败限流，多副本环境下 fail-closed。
+- Redis JTI 吊销和账号/IP 双维度登录失败限流，多副本环境采用失败关闭（fail-closed）。
 - 显式 Secure Cookie、可信代理 CIDR 和生产环境启动校验。
 - RBAC 角色、权限、用户角色和角色权限模型，以及接口级权限中间件。
 - 显式一次性管理员初始化，普通注册不再获得管理员权限。
 - 可关闭的公开注册入口：`REGISTRATION_ENABLED=false`。
 - 响应式 React 管理工作台、内存 Access Token、Cookie 会话恢复和权限路由。
 - Swagger、健康检查、结构化日志、Request ID、超时和优雅关闭。
-- `/version` 构建识别、Prometheus HTTP/运行时/readiness 指标和 4 条基础告警规则。
-- 带 SHA-256 manifest 的 MySQL 备份脚本，以及仅允许 `_restore_test` 的恢复演练脚本。
+- `/version` 构建识别、Prometheus HTTP / 运行时 / 就绪状态指标和 4 条基础告警规则。
+- 带 SHA-256 清单（manifest）的 MySQL 备份脚本，以及仅允许 `_restore_test` 的恢复演练脚本。
 - Compose 全栈、Kubernetes、CI、CodeQL、Dependabot 和 GHCR 发布。
 
 ## 快速开始
@@ -58,7 +58,7 @@ REGISTRATION_ENABLED=true
 docker compose up -d --build --wait
 ```
 
-Compose 会依次启动 MySQL、执行 Goose migration、启动 Redis、后端和前端。无需再手工运行 migration。
+Compose 会依次启动 MySQL、执行 Goose 数据库迁移、启动 Redis、后端和前端。无需再手工运行迁移。
 
 4. 创建第一个管理员：
 
@@ -95,11 +95,11 @@ docker compose run --rm -e BOOTSTRAP_ADMIN_USERNAME -e BOOTSTRAP_ADMIN_PASSWORD 
 | 区域 | 技术 |
 | --- | --- |
 | 后端 | Go 1.25.13、Gin、GORM、bcrypt、JWT |
-| 数据 | MySQL 8.4、Redis 7.4、Goose migration |
+| 数据 | MySQL 8.4、Redis 7.4、Goose 数据库迁移 |
 | 前端 | React 18、TypeScript 5、Vite 8、Redux Toolkit、Tailwind CSS |
-| 测试 | Go testing、httptest、miniredis、MySQL integration、Vitest、Testing Library、Playwright |
+| 测试 | Go testing、httptest、miniredis、MySQL 集成测试、Vitest、Testing Library、Playwright |
 | 交付 | Docker、Compose、Kubernetes、GitHub Actions、GHCR |
-| 安全 | govulncheck、npm audit、CodeQL、Dependabot、secret scanning |
+| 安全 | govulncheck、npm audit、CodeQL、Dependabot、密钥扫描（secret scanning） |
 
 ## 项目结构
 
@@ -183,7 +183,7 @@ npm --prefix frontend run test:e2e
 
 GitHub CI 还会构建前后端镜像、校验 Compose/Kubernetes 清单，并在完整栈上执行 Playwright 流程。
 
-## 最小可运维
+## 最小可运维能力
 
 在默认 Compose 栈上增加 Prometheus：
 
@@ -198,7 +198,7 @@ Prometheus 监听 `http://127.0.0.1:9090`，抓取后端 `/metrics`，并加载 
 make observability-down
 ```
 
-对运行中的 Compose MySQL 创建带校验和与 manifest 的备份：
+对运行中的 Compose MySQL 创建带校验和与清单（manifest）的备份：
 
 ```powershell
 make ops-backup
@@ -257,6 +257,6 @@ make ops-restore-drill BACKUP_PATH="backups/go_user_system-<timestamp>.sql"
 
 提交改动前阅读 `CONTRIBUTING.md` 和 `CODE_OF_CONDUCT.md`。安全问题不要创建公开 Issue，请按 `SECURITY.md` 使用 GitHub 私有漏洞报告。
 
-## License
+## 许可证
 
 [MIT](LICENSE)
