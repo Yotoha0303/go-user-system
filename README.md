@@ -243,6 +243,8 @@ make ops-restore-drill BACKUP_PATH="backups/go_user_system-<timestamp>.sql"
 
 ## 项目文档
 
+- `docs/real-world-testing-process.md`：真实业务场景的分层测试流程、验收用例、故障演练和执行记录模板。
+- `docs/test-records/2026-08-30-v1.0.0-rc.3-local.md`：本地真实业务测试、故障演练、备份恢复、缺陷与发布决定。
 - `docs/operation-record-public-delivery.md`：本次公开交付节点、范围和验收记录。
 - `docs/iteration-plan-public-delivery.md`：候选版本交付计划。
 - `docs/iteration-plan-production-auth-hardening.md`：生产认证加固设计。

@@ -1,0 +1,21 @@
+name: go-user-system-test
+
+services:
+  migrate:
+    image: go-user-system-backend:test
+
+  app:
+    image: go-user-system-backend:test
+    ports: !override
+      - "127.0.0.1:${BACKEND_PORT:-18082}:8082"
+
+  frontend:
+    image: go-user-system-frontend:test
+    ports: !override
+      - "127.0.0.1:${FRONTEND_PORT:-18080}:8080"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${TEST_COMPOSE_SUBNET:-172.31.50.0/24}

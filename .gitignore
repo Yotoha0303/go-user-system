@@ -17,6 +17,7 @@ logs/
 *.log
 backups/
 artifacts/operations/
+artifacts/test-runs/
 
 coverage.out
 coverage/
